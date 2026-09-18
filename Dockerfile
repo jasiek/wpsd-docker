@@ -155,20 +155,29 @@ RUN set -eux; \
     id pi-star; id mmdvm
 
 # --- WPSD components -------------------------------------------------------
-# /usr/local/sbin and the dashboard keep their .git: config/version.php and
-# .wpsd-common-funcs both run `git rev-parse` against them to render the version
-# string. /usr/local/bin deliberately does NOT get one -- see docs/ARCHITECTURE.md
-# on the self-updater.
-RUN git clone --branch "${WPSD_SCRIPTS_REF}" "${WPSD_SCRIPTS_REPO}" /tmp/scripts \
+# /usr/local/sbin and the dashboard keep a .git, because config/version.php,
+# .wpsd-common-funcs and .wpsd-sys-cache all run `git rev-parse` against them to
+# render the version string WPSD shows its user. But they keep metadata ONLY:
+# minify-git.sh reduces each .git to HEAD, one ref and the origin URL, which is
+# 32 KB instead of 15 MB and does not redistribute several thousand commits of
+# someone else's repository history. --depth 1 means that history is never even
+# fetched. /usr/local/bin deliberately has no .git at all -- see
+# docs/ARCHITECTURE.md on the in-place updaters.
+COPY scripts/minify-git.sh /tmp/minify-git.sh
+
+RUN git clone --depth 1 --branch "${WPSD_SCRIPTS_REF}" "${WPSD_SCRIPTS_REPO}" /tmp/scripts \
     && cp -a /tmp/scripts/. /usr/local/sbin/ \
     && rm -rf /tmp/scripts \
     && git -C /usr/local/sbin rev-parse --short=10 HEAD > /etc/.wpsd-scripts-ref
 
 RUN rm -rf /var/www/html \
-    && git clone --branch "${WPSD_WEB_REF}" "${WPSD_WEB_REPO}" /var/www/dashboard \
-    && chown -R www-data:www-data /var/www/dashboard \
+    && git clone --depth 1 --branch "${WPSD_WEB_REF}" "${WPSD_WEB_REPO}" /var/www/dashboard \
     && git config --system --add safe.directory /var/www/dashboard \
-    && git config --system --add safe.directory /usr/local/sbin
+    && git config --system --add safe.directory /usr/local/sbin \
+    && bash /tmp/minify-git.sh /var/www/dashboard \
+    && bash /tmp/minify-git.sh /usr/local/sbin \
+    && rm -f /tmp/minify-git.sh \
+    && chown -R www-data:www-data /var/www/dashboard
 
 COPY --from=builder /out/usr/local/bin/ /usr/local/bin/
 COPY --from=builder /out/usr/local/lib/ /usr/local/lib/
@@ -228,6 +237,22 @@ ENV LANG=en_US.UTF-8 \
     WPSD_ENABLE_SAMBA=0 \
     WPSD_ENABLE_DNSMASQ=0 \
     WPSD_ENABLE_HOSTAPD=0
+
+# Metadata for a published image. The source pointers are not decoration: this
+# ships GPL-2.0/GPL-3.0 binaries and PHP, so the image has to say where the
+# corresponding source is. Upstream also asks not to be mistaken for the official
+# distribution, hence the explicit disclaimer.
+LABEL org.opencontainers.image.title="wpsd-docker" \
+      org.opencontainers.image.description="Unofficial container build of WPSD (W0CHP amateur-radio digital-voice hotspot software). Not affiliated with or supported by the WPSD project." \
+      org.opencontainers.image.url="https://wpsd.radio/" \
+      org.opencontainers.image.documentation="https://wpsd.radio/" \
+      org.opencontainers.image.licenses="GPL-2.0-or-later AND GPL-3.0-or-later" \
+      org.opencontainers.image.vendor="unofficial community build" \
+      org.opencontainers.image.source="https://repo.w0chp.net/WPSD-Dev" \
+      io.wpsd-docker.upstream.binaries-source="https://repo.w0chp.net/WPSD-Dev/WPSD_CustomBinaries-Source" \
+      io.wpsd-docker.upstream.webcode="https://wpsd-swd.w0chp.net/WPSD-SWD/WPSD-WebCode" \
+      io.wpsd-docker.upstream.scripts="https://wpsd-swd.w0chp.net/WPSD-SWD/WPSD-Scripts" \
+      io.wpsd-docker.notice="WPSD is (C) Chip Cuccio, W0CHP. Official images come only from wpsd.radio; this is a community container build and upstream provides no support for it."
 
 EXPOSE 80 443
 VOLUME ["/usr/local/etc", "/var/log/pi-star", "/var/lib/wpsd-units"]
