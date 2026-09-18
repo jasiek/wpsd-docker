@@ -6,10 +6,13 @@ software — in a container, built from source for your machine's architecture.
 Not an official WPSD project. Upstream provides no support for containers.
 
 ```sh
-docker compose build          # compiles the radio daemons (~10 min)
+./scripts/build.sh --test     # compiles the radio daemons (~10 min), then verifies
 docker compose up -d
 open http://localhost:8080/   # admin pages: pi-star / raspberry -- change this
 ```
+
+`docker compose build` works too; `scripts/build.sh` adds `--test`, `--export`
+and cross-architecture builds.
 
 With no modem attached the dashboard comes up and the radio daemons stay down,
 which is what the appliance does before Configuration is run.
@@ -90,6 +93,41 @@ files are what let the gateways resolve reflectors and talkgroups, and the
 software cannot route a call without them. Details in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-in-place-updaters).
 
+## One image, exportable
+
+The result is a single self-contained image. It needs no compose file, no
+capabilities and no bind mounts to start:
+
+```sh
+docker run -d --name wpsd -p 8080:80 --cap-add SYS_NICE wpsd:local
+```
+
+`--cap-add SYS_NICE` is the only flag worth adding unprompted: the MMDVMHost
+wrapper runs the daemon at `nice -n -10` for slot timing, and without it you get
+`nice: cannot set niceness: Permission denied` — the daemon still runs, just not
+prioritised. Volumes are optional but recommended (see `compose.yaml`), otherwise
+your dashboard config and the 27 MB of host-file data are lost when the container
+is replaced.
+
+To move it to another machine:
+
+```sh
+./scripts/build.sh --export wpsd.tar.gz     # 207 MB
+# elsewhere:
+docker load -i wpsd.tar.gz
+```
+
+A `docker save` tarball is single-architecture. For one file that runs on both,
+build a multi-platform OCI archive:
+
+```sh
+./scripts/build.sh --platform linux/amd64,linux/arm64 --export wpsd-oci.tar
+docker load -i wpsd-oci.tar     # needs Docker's containerd image store
+```
+
+Each non-native architecture compiles under QEMU, so budget about twenty minutes
+per extra platform.
+
 ## Size
 
 ~610 MB. Most of it is the Debian runtime plus the optional daemons the appliance
@@ -109,7 +147,7 @@ about 250 MB — and nothing in WPSD calls `gpspipe`, `cgps` or `gpsmon`.
 | `linux/amd64` | full except GPIO/I²C displays (Nextion over serial still works) |
 
 ```sh
-docker buildx build --platform linux/arm64,linux/amd64 -t wpsd:local .
+./scripts/build.sh --platform linux/arm64,linux/amd64 --export wpsd-oci.tar
 ```
 
 ## Repository layout
@@ -118,7 +156,8 @@ docker buildx build --platform linux/arm64,linux/amd64 -t wpsd:local .
 Dockerfile                builder / s6 / runtime stages
 compose.yaml
 scripts/
-  build-binaries.sh       mirrors upstream's build-all.sh, natively
+  build.sh                build from scratch; --test, --export, --platform
+  build-binaries.sh       mirrors upstream's build-all.sh, natively (builder stage)
   extract-reference.sh    dev-time: pull configs and unit files out of the .img
 rootfs/
   usr/local/bin/systemctl the shim, plus journalctl/timedatectl/nmcli/reboot/...
