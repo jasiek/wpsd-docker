@@ -67,7 +67,17 @@ if [[ $MULTI -eq 1 ]]; then
     # portable single file. Load it elsewhere with `docker load -i <file>`
     # (needs the containerd image store) or push it to a registry.
     [[ -n $EXPORT ]] || die "--platform with several architectures needs --export FILE (an OCI archive)"
-    docker buildx build $NO_CACHE ${EXTRA[@]+"${EXTRA[@]}"} \
+
+    # The default "docker" buildx driver supports neither multi-platform results
+    # nor the OCI exporter, so provision a docker-container builder. It persists,
+    # keeping its own build cache for subsequent runs.
+    BUILDER=wpsd-multiarch
+    if ! docker buildx inspect "$BUILDER" >/dev/null 2>&1; then
+        step "creating buildx builder '$BUILDER' (docker-container driver)"
+        docker buildx create --name "$BUILDER" --driver docker-container --bootstrap >/dev/null
+    fi
+
+    docker buildx build --builder "$BUILDER" $NO_CACHE ${EXTRA[@]+"${EXTRA[@]}"} \
         --platform "$PLATFORM" \
         --tag "$TAG" \
         --output "type=oci,dest=$EXPORT" \

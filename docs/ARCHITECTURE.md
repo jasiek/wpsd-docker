@@ -96,6 +96,23 @@ The stock `Makefile` omits the resampler, so the build script injects `-DHAS_SRC
 and `-lsamplerate`: the WPSD config files set `[Modem]` resampler options that
 `Conf.cpp` only parses when that macro is defined.
 
+Two more differences between those two makefiles bit on the amd64 path, and both
+are worth knowing about before touching the build:
+
+* **Different install destinations.** `Makefile.WPSD` installs into
+  `$(HOME)/dev/WPSD-Binaries/`; the stock `Makefile` installs into
+  `/usr/local/bin/`. The first amd64 build therefore compiled MMDVMHost
+  successfully and collected nothing — `built 27 executables`, no MMDVMHost. The
+  build script now places MMDVMHost and RemoteCommand itself and asserts the full
+  25-binary set is present, so an incomplete collection fails the build.
+* **Different GitVersion.h rules.** The stock Makefile only calls
+  `git rev-parse HEAD` when `.git/index` exists *in the subproject directory*;
+  here the repository root is one or two levels up, so it took the else branch and
+  wrote 40 zeros. `MMDVMHost -v` then reported `git #0000000`, which
+  `.wpsd-sys-cache` parses straight onto the dashboard. The build seeds
+  `GitVersion.h` with the real commit after each `make clean` — the target has no
+  prerequisites, so make leaves a seeded file alone.
+
 ## Finding the packages WPSD actually needs
 
 Guessing the runtime package list from the appliance's `dpkg` manual-install set

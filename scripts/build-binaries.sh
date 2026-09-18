@@ -18,7 +18,9 @@ OUT=${OUT:-/out/usr/local/bin}
 ARCH=${TARGETARCH:-$(dpkg --print-architecture)}
 JOBS=$(nproc)
 
-mkdir -p "$DEST" "$OUT"
+# /out/usr/local/lib is COPYed by the Dockerfile unconditionally, but only the arm
+# path puts the display libraries in it, so it has to exist either way.
+mkdir -p "$DEST" "$OUT" /out/usr/local/lib
 
 echo "==> building WPSD binaries for ${ARCH} with ${JOBS} jobs"
 
@@ -31,6 +33,21 @@ find . -name Version.h -exec sed -i \
     -e "/const char\* VERSION =/ s/\"[^\"]*\"/\"${STAMP}\"/" \
     -e "/const wxString VERSION =/ s/wxT(\"[^\"]*\");/wxT(\"${STAMP}\");/" {} \;
 echo "    version stamp: ${STAMP}"
+
+# The STOCK Makefiles generate GitVersion.h only when a .git/index exists in the
+# SUBPROJECT directory. Here the repository root is one or two levels up, so they
+# take the else branch and write 40 zeros -- and `MMDVMHost -v` then reports
+# "git #0000000", which .wpsd-sys-cache parses straight onto the dashboard.
+# Makefile.WPSD has no such guard, which is why only the amd64 path was affected.
+# These targets have no prerequisites, so seeding the file makes make leave it
+# alone; it has to be re-seeded after each `make clean`, which deletes it.
+SRC_COMMIT=$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)
+echo "    source commit: ${SRC_COMMIT}"
+
+seed_gitversion() {                     # seed_gitversion <dir> <makefile>
+    grep -q 'GitVersion\.h' "$1/$2" 2>/dev/null || return 0
+    printf 'const char *gitversion = "%s";\n' "$SRC_COMMIT" > "$1/GitVersion.h"
+}
 
 # --- display libraries (arm64 only) -----------------------------------------
 # ArduiPi_OLED drives I2C/SPI OLED panels through bcm2835 register access, and
@@ -82,6 +99,7 @@ build() {                               # build <subdir> [makefile]
     echo "==> ${dir}  (-f ${mk})"
     cd "$SRC/$dir"
     make -f "$mk" clean >/dev/null 2>&1 || true
+    seed_gitversion "$SRC/$dir" "$mk"
     make -f "$mk" -j"$JOBS" CXX="$CXX_FIX" CC="$CC_FIX"
     make -f "$mk" install   CXX="$CXX_FIX" CC="$CC_FIX"
     make -f "$mk" clean >/dev/null 2>&1 || true
@@ -97,6 +115,7 @@ build_noinstall() {                     # build_noinstall <subdir> <makefile> <b
     echo "==> ${dir}  (-f ${mk}, manual install)"
     cd "$SRC/$dir"
     make -f "$mk" clean >/dev/null 2>&1 || true
+    seed_gitversion "$SRC/$dir" "$mk"
     make -f "$mk" -j"$JOBS" CXX="$CXX_FIX" CC="$CC_FIX"
     install -m 755 "$@" "$DEST/"
     make -f "$mk" clean >/dev/null 2>&1 || true

@@ -141,10 +141,13 @@ about 250 MB — and nothing in WPSD calls `gpspipe`, `cgps` or `gpsmon`.
 
 ## Architecture support
 
-| Target | Status |
-| --- | --- |
-| `linux/arm64` | full — OLED, HD44780, PCF8574 and Nextion displays |
-| `linux/amd64` | full except GPIO/I²C displays (Nextion over serial still works) |
+| Target | Status | Verified |
+| --- | --- | --- |
+| `linux/arm64` | full — OLED, HD44780, PCF8574 and Nextion displays | 29 binaries, 584 MB, 45/45 |
+| `linux/amd64` | full except GPIO/I²C displays (Nextion over serial still works) | 29 binaries, 516 MB, 45/45 |
+
+Both were built and run end to end; the amd64 one under QEMU on an arm64 host, so
+"it compiles and passes" rather than "it is fast".
 
 ```sh
 ./scripts/build.sh --platform linux/arm64,linux/amd64 --export wpsd-oci.tar
