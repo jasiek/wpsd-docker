@@ -52,6 +52,19 @@ the shim, asserts the parsed-output contracts the dashboard depends on, confirms
 all the binaries are present and native, exercises the web stack and its auth,
 and starts MMDVMHost against a null modem.
 
+## Expected noise before you configure it
+
+Until you run the dashboard's Configuration page once, the php-fpm log carries
+`Undefined array key "Modem" in .../admin/configure.php` warnings. That is the
+appliance's own pre-configuration state, not a container problem:
+`/etc/dstar-radio.mmdvmhost` is written by `configure.php`, and until it exists
+the page has no `[Modem]` section to read. `display_errors` is `Off`, so they
+never reach the browser. They stop once a modem is configured.
+
+For the same reason `wpsd-services status` reports every radio daemon `INACTIVE`
+on a fresh install — each wrapper script gates on that file. `pistar-watchdog`,
+`cron` and the timers should be `ACTIVE`.
+
 ## Configuration
 
 | Variable | Default | Effect |
