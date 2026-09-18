@@ -1,8 +1,0 @@
-[Unit]
-Description=WPSD Running Tasks
-
-[Service]
-ExecStart=/usr/local/sbin/.wpsd-running-tasks
-User=root
-Group=root
-Type=oneshot

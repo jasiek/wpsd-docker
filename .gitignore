@@ -2,8 +2,12 @@
 *.img
 *.img.xz
 
-# Reference assets extracted from the image at dev time
+# Reference assets extracted from the image at dev time. These are W0CHP's files
+# verbatim, so they are generated rather than committed -- see reference/README.md.
+#   scripts/extract-reference.sh                  (from the appliance image)
+#   scripts/extract-reference.sh --units-from-upstream
 reference/rootfs/
+reference/units/
 
 # Build scratch
 .build/

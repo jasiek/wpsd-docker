@@ -226,6 +226,13 @@ RUN set -eux; \
         ln -sf "/usr/local/bin/${t}" "/sbin/${t}"; \
     done
 
+# Generate the default dashboard credential rather than shipping upstream's hash
+# file: a fresh bcrypt hash is reproducible from documented inputs and is one less
+# file of someone else's taken verbatim. Change it with
+#   htpasswd /var/www/.htpasswd pi-star
+RUN htpasswd -cbB /etc/wpsd-defaults/htpasswd pi-star raspberry \
+    && chmod 644 /etc/wpsd-defaults/htpasswd
+
 RUN set -eux; \
     [ -x /usr/local/bin/gpio ] && ln -sf /usr/local/bin/gpio /usr/bin/gpio || true; \
     rm -f /etc/nginx/sites-enabled/default; \
