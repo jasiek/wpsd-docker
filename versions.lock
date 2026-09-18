@@ -1,0 +1,37 @@
+# Pinned upstream revisions for wpsd-docker.
+#
+# scripts/build.sh passes every WPSD_* entry below through as a build argument, so
+# pinning a new component needs no change to the script. A build is then
+# reproducible: the same lock gives the same software months later. Without it the
+# build tracks branches, and two builds a week apart differ.
+#
+#   scripts/build.sh --update-lock    repin to upstream HEAD (resolves SHAs itself)
+#   scripts/build.sh --latest         ignore the lock, track the branches
+#
+# Never hand-write a SHA here. Use --update-lock.
+#
+# _BRANCH is the branch HEAD sits on inside the image -- WPSD reads the branch
+# name to render its version string, so it is not cosmetic. _REF is the commit
+# actually fetched: a SHA to pin, or the branch name to float.
+
+# Radio daemon sources. Architecture is a BRANCH upstream, not a build flag: the
+# arm64 branch holds the 64-bit-clean sources and compiles for amd64 too.
+WPSD_SRC_REPO=https://repo.w0chp.net/WPSD-Dev/WPSD_CustomBinaries-Source.git
+WPSD_SRC_BRANCH=arm64
+WPSD_SRC_REF=c6e806c0a900776194824a6dd8a83361c9ad739b
+
+# /usr/local/sbin -- service wrappers, pistar-watchdog, the helpers
+WPSD_SCRIPTS_REPO=https://wpsd-swd.w0chp.net/WPSD-SWD/WPSD-Scripts.git
+WPSD_SCRIPTS_BRANCH=master
+WPSD_SCRIPTS_REF=1baf73be0f8f7ba66575d06bc1db113acb19a9a8
+
+# /var/www/dashboard -- the PHP dashboard
+WPSD_WEB_REPO=https://wpsd-swd.w0chp.net/WPSD-SWD/WPSD-WebCode.git
+WPSD_WEB_BRANCH=master
+WPSD_WEB_REF=6d52f7262d8fb0d1cf208024cf39e450fed3ef7d
+
+# Modem firmware blobs only. The executables are built from source, not taken
+# from this repo.
+WPSD_BIN_REPO=https://repo.w0chp.net/WPSD-Dev/WPSD-Binaries.git
+WPSD_BIN_BRANCH=master
+WPSD_BIN_REF=7dca264f5019431acbecd1f875483cd79333d276

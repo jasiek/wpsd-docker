@@ -15,13 +15,21 @@ ARG S6_VERSION=3.2.3.2
 
 # Arch is a BRANCH in upstream's repos, not a build flag. The arm64 branch holds
 # the 64-bit-clean sources and compiles for amd64 too; master is the armhf branch.
+#
+# Every *_REF defaults to its branch name, i.e. "track upstream". scripts/build.sh
+# overrides them from versions.lock so a build is reproducible; see that file.
 ARG WPSD_SRC_BRANCH=arm64
 ARG WPSD_SRC_REPO=https://repo.w0chp.net/WPSD-Dev/WPSD_CustomBinaries-Source.git
 ARG WPSD_BIN_REPO=https://repo.w0chp.net/WPSD-Dev/WPSD-Binaries.git
 ARG WPSD_SCRIPTS_REPO=https://wpsd-swd.w0chp.net/WPSD-SWD/WPSD-Scripts.git
 ARG WPSD_WEB_REPO=https://wpsd-swd.w0chp.net/WPSD-SWD/WPSD-WebCode.git
+ARG WPSD_SRC_REF=arm64
+ARG WPSD_SCRIPTS_BRANCH=master
 ARG WPSD_SCRIPTS_REF=master
+ARG WPSD_WEB_BRANCH=master
 ARG WPSD_WEB_REF=master
+ARG WPSD_BIN_BRANCH=master
+ARG WPSD_BIN_REF=master
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +47,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libsamplerate0-dev libwxgtk3.2-dev libgps-dev libi2c-dev libusb-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone --depth 1 --branch "${WPSD_SRC_BRANCH}" "${WPSD_SRC_REPO}" /build/src \
+ARG WPSD_SRC_REF
+COPY scripts/fetch-checkout.sh /usr/local/bin/fetch-checkout
+RUN fetch-checkout "${WPSD_SRC_REPO}" "${WPSD_SRC_BRANCH}" "${WPSD_SRC_REF}" /build/src \
     && git -C /build/src rev-parse HEAD > /build/src-commit
 
 COPY scripts/build-binaries.sh /build/build-binaries.sh
@@ -50,9 +60,11 @@ RUN TARGETARCH="${TARGETARCH}" SRC=/build/src OUT=/out/usr/local/bin \
 # page serves. Only this subdirectory is taken from the prebuilt-binaries repo;
 # the executables themselves are the ones just compiled above.
 ARG WPSD_BIN_REPO
+ARG WPSD_BIN_BRANCH
+ARG WPSD_BIN_REF
 # A partial clone (--filter=blob:none) would fetch ~8 MB instead of 89 MB, but
 # this Gitea instance does not advertise uploadpack.allowFilter, so it fails.
-RUN git clone --depth 1 --branch master "${WPSD_BIN_REPO}" /build/bin-repo \
+RUN fetch-checkout "${WPSD_BIN_REPO}" "${WPSD_BIN_BRANCH}" "${WPSD_BIN_REF}" /build/bin-repo \
     && cp -a /build/bin-repo/firmware /out/usr/local/bin/firmware \
     && cp -a /build/bin-repo/LICENSE  /out/usr/local/bin/LICENSE \
     && rm -rf /build/bin-repo
@@ -163,20 +175,23 @@ RUN set -eux; \
 # someone else's repository history. --depth 1 means that history is never even
 # fetched. /usr/local/bin deliberately has no .git at all -- see
 # docs/ARCHITECTURE.md on the in-place updaters.
-COPY scripts/minify-git.sh /tmp/minify-git.sh
+ARG WPSD_SCRIPTS_BRANCH
+ARG WPSD_WEB_BRANCH
+COPY scripts/minify-git.sh   /tmp/minify-git.sh
+COPY scripts/fetch-checkout.sh /usr/local/bin/fetch-checkout
 
-RUN git clone --depth 1 --branch "${WPSD_SCRIPTS_REF}" "${WPSD_SCRIPTS_REPO}" /tmp/scripts \
+RUN fetch-checkout "${WPSD_SCRIPTS_REPO}" "${WPSD_SCRIPTS_BRANCH}" "${WPSD_SCRIPTS_REF}" /tmp/scripts \
     && cp -a /tmp/scripts/. /usr/local/sbin/ \
     && rm -rf /tmp/scripts \
     && git -C /usr/local/sbin rev-parse --short=10 HEAD > /etc/.wpsd-scripts-ref
 
 RUN rm -rf /var/www/html \
-    && git clone --depth 1 --branch "${WPSD_WEB_REF}" "${WPSD_WEB_REPO}" /var/www/dashboard \
+    && fetch-checkout "${WPSD_WEB_REPO}" "${WPSD_WEB_BRANCH}" "${WPSD_WEB_REF}" /var/www/dashboard \
     && git config --system --add safe.directory /var/www/dashboard \
     && git config --system --add safe.directory /usr/local/sbin \
     && bash /tmp/minify-git.sh /var/www/dashboard \
     && bash /tmp/minify-git.sh /usr/local/sbin \
-    && rm -f /tmp/minify-git.sh \
+    && rm -f /tmp/minify-git.sh /usr/local/bin/fetch-checkout \
     && chown -R www-data:www-data /var/www/dashboard
 
 COPY --from=builder /out/usr/local/bin/ /usr/local/bin/

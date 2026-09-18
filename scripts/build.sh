@@ -6,7 +6,9 @@
 #   scripts/build.sh --test                            build, then run the smoke test
 #   scripts/build.sh --export wpsd.tar.gz              build + a portable tarball
 #   scripts/build.sh --platform linux/amd64,linux/arm64 --export wpsd-oci.tar
-#   scripts/build.sh --tag jasiek/wpsd:latest --platform linux/amd64,linux/arm64 --push
+#   scripts/build.sh --tag user/wpsd:latest --platform linux/amd64,linux/arm64 --push
+#   scripts/build.sh --update-lock                     repin versions.lock to upstream HEAD
+#   scripts/build.sh --latest                          ignore the lock, track branches
 #
 # Everything WPSD comes from W0CHP's own servers at build time -- nothing is
 # vendored -- so this needs network access. Budget ten minutes for the native
@@ -19,6 +21,9 @@ cd "$REPO"
 
 TAGS=()
 PLATFORM=""
+LOCK_FILE="$REPO/versions.lock"
+USE_LOCK=1
+UPDATE_LOCK=0
 EXPORT=""
 PUSH=0
 RUN_TEST=0
@@ -37,10 +42,12 @@ while [[ $# -gt 0 ]]; do
         --push)         PUSH=1; shift ;;
         --test)         RUN_TEST=1; shift ;;
         --no-cache)     NO_CACHE=--no-cache; shift ;;
+        --latest)       USE_LOCK=0; shift ;;
+        --update-lock)  UPDATE_LOCK=1; shift ;;
         --ref)          EXTRA+=(--build-arg "WPSD_SCRIPTS_REF=${2:?}"
                                 --build-arg "WPSD_WEB_REF=${2}"); shift 2 ;;
         --src-branch)   EXTRA+=(--build-arg "WPSD_SRC_BRANCH=${2:?}"); shift 2 ;;
-        -h|--help)      sed -n '3,14p' "${BASH_SOURCE[0]}" | sed 's/^#\s\?//'; exit 0 ;;
+        -h|--help)      sed -n '3,16p' "${BASH_SOURCE[0]}" | sed 's/^#\s\?//'; exit 0 ;;
         *)              die "unknown option: $1  (try --help)" ;;
     esac
 done
@@ -50,6 +57,51 @@ PRIMARY_TAG=${TAGS[0]}
 
 command -v docker >/dev/null || die "docker not found"
 docker info >/dev/null 2>&1   || die "cannot talk to the docker daemon"
+
+# --- pinned upstream revisions ---------------------------------------------
+# versions.lock is a flat KEY=VALUE file whose every entry is passed through as a
+# build argument, so pinning a new component needs no change here. Never hand-write
+# a SHA into it -- use --update-lock, which resolves them with `git ls-remote`.
+lock_get() { sed -n "s/^$1=//p" "$LOCK_FILE" 2>/dev/null | tail -1; }
+
+if [[ $UPDATE_LOCK -eq 1 ]]; then
+    [[ -f $LOCK_FILE ]] || die "no $LOCK_FILE to update"
+    step "resolving upstream HEADs"
+    tmp=$(mktemp)
+    while IFS= read -r line; do
+        case $line in
+            WPSD_*_REF=*)
+                key=${line%%=*}
+                comp=${key%_REF}                      # e.g. WPSD_WEB
+                url=$(lock_get "${comp}_REPO")
+                branch=$(lock_get "${comp}_BRANCH")
+                if [[ -z $url || -z $branch ]]; then
+                    echo "$line" >> "$tmp"; continue
+                fi
+                sha=$(GIT_TERMINAL_PROMPT=0 git ls-remote "$url" "$branch" 2>/dev/null | cut -f1)
+                [[ -n $sha ]] || die "could not resolve ${branch} in ${url}"
+                printf '%s=%s\n' "$key" "$sha" >> "$tmp"
+                echo "    ${comp}  ${branch} -> ${sha:0:10}"
+                ;;
+            *) echo "$line" >> "$tmp" ;;
+        esac
+    done < "$LOCK_FILE"
+    mv "$tmp" "$LOCK_FILE"
+    step "updated $LOCK_FILE"
+    exit 0
+fi
+
+LOCK_ARGS=()
+if [[ $USE_LOCK -eq 1 && -f $LOCK_FILE ]]; then
+    while IFS= read -r line; do
+        case $line in
+            WPSD_*=*) LOCK_ARGS+=(--build-arg "$line") ;;
+        esac
+    done < "$LOCK_FILE"
+    echo "using pinned revisions from $(basename "$LOCK_FILE")"
+elif [[ $USE_LOCK -eq 0 ]]; then
+    echo "ignoring $(basename "$LOCK_FILE"): tracking upstream branches"
+fi
 
 HOST_ARCH=$(docker info --format '{{.Architecture}}' 2>/dev/null)
 case $HOST_ARCH in
@@ -108,7 +160,8 @@ if [[ $MULTI -eq 1 || $PLATFORM != "$HOST_PLATFORM" ]]; then
 NOTE
 fi
 
-docker buildx build ${BUILDER_ARGS[@]+"${BUILDER_ARGS[@]}"} $NO_CACHE ${EXTRA[@]+"${EXTRA[@]}"} \
+docker buildx build ${BUILDER_ARGS[@]+"${BUILDER_ARGS[@]}"} $NO_CACHE \
+    ${LOCK_ARGS[@]+"${LOCK_ARGS[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
     --platform "$PLATFORM" \
     "${TAG_ARGS[@]}" \
     "${OUTPUT_ARGS[@]}" \

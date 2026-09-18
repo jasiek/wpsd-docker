@@ -81,6 +81,34 @@ on a fresh install — each wrapper script gates on that file. `pistar-watchdog`
 | `WPSD_ENABLE_SAMBA` | `0` | file sharing |
 | `WPSD_ENABLE_DNSMASQ` / `_HOSTAPD` | `0` | AP mode; needs `network_mode: host` and `NET_ADMIN` |
 
+## Pinned upstream revisions
+
+`versions.lock` records the exact commit of each upstream component, and
+`scripts/build.sh` passes them as build arguments, so the same lock gives the same
+software months later:
+
+```
+WPSD_SRC_REF=c6e806c0a900776194824a6dd8a83361c9ad739b   # radio daemon sources
+WPSD_SCRIPTS_REF=1baf73be0f8f7ba66575d06bc1db113acb19a9a8
+WPSD_WEB_REF=6d52f7262d8fb0d1cf208024cf39e450fed3ef7d   # dashboard
+WPSD_BIN_REF=7dca264f5019431acbecd1f875483cd79333d276   # modem firmware blobs
+```
+
+```sh
+./scripts/build.sh --update-lock   # repin to upstream HEAD
+./scripts/build.sh --latest        # ignore the lock, track branches
+```
+
+Don't hand-write a SHA in there — `--update-lock` resolves them with
+`git ls-remote`. (The first one I typed by hand was wrong past the tenth
+character, which is how this ended up being generated rather than edited.)
+
+Submodules would give the same pinning, but they were the wrong tool here: a
+submodule's `.git` is a *file* pointing outside the build context, so the copy in
+the image has no working git at all — and four places in WPSD read git metadata to
+render the version string. They would also make every contributor clone ~120 MB of
+upstream history, which is exactly what `--depth 1` avoids.
+
 ## Updating
 
 Rebuild. `docker compose build --pull && docker compose up -d`. Your config,
@@ -116,6 +144,16 @@ To move it to another machine:
 # elsewhere:
 docker load -i wpsd.tar.gz
 ```
+
+Or pull a published build:
+
+```sh
+docker run -d --name wpsd -p 8080:80 --cap-add SYS_NICE jasiek/wpsd:latest
+```
+
+That tag is a multi-arch manifest (`linux/amd64` + `linux/arm64`); Docker picks
+the right one. It is a community build, not an official WPSD image — upstream
+supports neither it nor containers generally.
 
 A `docker save` tarball is single-architecture. For one file that runs on both,
 build a multi-platform OCI archive:
@@ -158,8 +196,11 @@ Both were built and run end to end; the amd64 one under QEMU on an arm64 host, s
 ```
 Dockerfile                builder / s6 / runtime stages
 compose.yaml
+versions.lock             pinned upstream commits (generated, not hand-edited)
 scripts/
-  build.sh                build from scratch; --test, --export, --platform
+  build.sh                build from scratch; --test, --export, --platform, --push
+  fetch-checkout.sh       fetch one pinned commit (--depth 1, by SHA)
+  minify-git.sh           reduce a .git to metadata only
   build-binaries.sh       mirrors upstream's build-all.sh, natively (builder stage)
   extract-reference.sh    dev-time: pull configs and unit files out of the .img
 rootfs/
