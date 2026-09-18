@@ -87,28 +87,31 @@ build() {                               # build <subdir> [makefile]
     make -f "$mk" clean >/dev/null 2>&1 || true
 }
 
-# NXDNParrot's stock makefile has no install target (upstream's build-all.sh
-# does not call one either), so place it by hand.
-build_noinstall() {
-    local dir=$1 bin=$2
-    echo "==> ${dir}  (manual install)"
+# Some subprojects' install targets do not write to $DEST:
+#   NXDNParrot has no install target at all (upstream's build-all.sh does not
+#   call one either), and MMDVMHost's STOCK Makefile installs to /usr/local/bin
+#   while its Makefile.WPSD installs to $HOME/dev/WPSD-Binaries. Place those by
+#   hand so both makefile paths land in the same place.
+build_noinstall() {                     # build_noinstall <subdir> <makefile> <bin>...
+    local dir=$1 mk=$2; shift 2
+    echo "==> ${dir}  (-f ${mk}, manual install)"
     cd "$SRC/$dir"
-    make clean >/dev/null 2>&1 || true
-    make -j"$JOBS" CXX="$CXX_FIX" CC="$CC_FIX"
-    install -m 755 "$bin" "$DEST/"
-    make clean >/dev/null 2>&1 || true
+    make -f "$mk" clean >/dev/null 2>&1 || true
+    make -f "$mk" -j"$JOBS" CXX="$CXX_FIX" CC="$CC_FIX"
+    install -m 755 "$@" "$DEST/"
+    make -f "$mk" clean >/dev/null 2>&1 || true
 }
 
 # --- build, in upstream's order ---------------------------------------------
 build APRSGateway
-cd "$SRC/MMDVMHost"
 if [[ -n $MMDVM_EXTRA_CFLAGS ]]; then
     # The stock Makefile omits the resampler; MMDVMHost's Conf.cpp needs
     # -DHAS_SRC for the [Modem] resampler options the WPSD config files set.
+    cd "$SRC/MMDVMHost"
     sed -i "s|^CFLAGS  = |CFLAGS  = ${MMDVM_EXTRA_CFLAGS} |" "$MMDVM_MAKEFILE"
     sed -i "s|^LIBS    = |LIBS    = -lsamplerate |" "$MMDVM_MAKEFILE"
 fi
-build MMDVMHost "$MMDVM_MAKEFILE"
+build_noinstall MMDVMHost "$MMDVM_MAKEFILE" MMDVMHost RemoteCommand
 build DAPNETGateway
 build DMRGateway Makefile.WPSD
 build AMBEServer
@@ -120,7 +123,7 @@ build MMDVM_CM/YSF2DMR
 build MMDVM_CM/YSF2P25
 build MMDVM_CM/YSF2NXDN
 build NXDNClients/NXDNGateway
-build_noinstall NXDNClients/NXDNParrot NXDNParrot
+build_noinstall NXDNClients/NXDNParrot Makefile NXDNParrot
 build P25Clients/P25Gateway
 build P25Clients/P25Parrot
 build YSFClients/YSFGateway
@@ -164,6 +167,26 @@ if [[ $ARCH == arm64 || $ARCH == armhf || $ARCH == arm ]]; then
         install -m 4755 /usr/local/bin/gpio /out/usr/local/bin/gpio
         echo "    gpio CLI: installed"
     fi
+fi
+
+# Assert the set WPSD's service wrappers and dashboard actually invoke. Without
+# this, a subproject whose install target writes somewhere unexpected -- which is
+# exactly how MMDVMHost behaved on the stock Makefile path -- is a silently
+# incomplete image rather than a failed build.
+REQUIRED="MMDVMHost RemoteCommand DMRGateway ircddbgatewayd timeserverd
+          timercontrold starnetserverd YSFGateway DGIdGateway YSFParrot
+          NXDNGateway NXDNParrot P25Gateway P25Parrot DAPNETGateway APRSGateway
+          YSF2DMR YSF2P25 YSF2NXDN DMR2YSF DMR2NXDN NextionDriver MMDVMCal
+          AMBEserver teensy_loader_cli"
+missing=""
+for b in $REQUIRED; do
+    [[ -x $OUT/$b ]] || missing="$missing $b"
+done
+if [[ -n $missing ]]; then
+    echo "ERROR: these binaries were not collected into ${OUT}:${missing}" >&2
+    echo "       present:" >&2
+    ls -1 "$OUT" | sed 's/^/         /' >&2
+    exit 1
 fi
 
 echo "==> built $(find "$OUT" -maxdepth 1 -type f -executable | wc -l) executables"
