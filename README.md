@@ -14,6 +14,12 @@ open http://localhost:8080/   # admin pages: pi-star / raspberry -- change this
 With no modem attached the dashboard comes up and the radio daemons stay down,
 which is what the appliance does before Configuration is run.
 
+First boot takes a couple of minutes: it fetches ~27 MB of host, talkgroup and
+DMR-ID data into a volume (without it the gateways cannot resolve a reflector).
+After that, a restart has the dashboard serving in about 10 seconds and
+MMDVMHost running about 15 seconds in — the service wrapper waits for an
+interface to get an IP and then sleeps 5 s, exactly as on the appliance.
+
 ## What you get
 
 MMDVMHost, DMRGateway, ircDDBGateway, YSFGateway, DGIdGateway, NXDNGateway,
@@ -70,6 +76,17 @@ upstream's armhf ones. What is *not* gated is the hourly host-file fetch: those
 files are what let the gateways resolve reflectors and talkgroups, and the
 software cannot route a call without them. Details in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-in-place-updaters).
+
+## Size
+
+~610 MB. Most of it is the Debian runtime plus the optional daemons the appliance
+also ships (samba, avahi, gpsd, vnstat, shellinabox, the Python display stack).
+The WPSD parts are small: 16 MB of compiled binaries, 21 MB of dashboard, and
+27 MB of host-file data that lives in a volume rather than the image.
+
+Worth knowing if you trim it further: `gpsd-clients` is deliberately absent. In
+Trixie it depends on `python3-matplotlib`, which pulls in sympy and mpmath for
+about 250 MB — and nothing in WPSD calls `gpspipe`, `cgps` or `gpsmon`.
 
 ## Architecture support
 

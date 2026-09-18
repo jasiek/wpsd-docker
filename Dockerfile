@@ -101,6 +101,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Trixie ships PHP 8.4, which is exactly what the appliance runs -- no third
 # party PHP repository needed.
+#
+# Deliberately absent: gpsd-clients. Nothing in WPSD calls gpspipe, cgps or
+# gpsmon, the appliance does not install it, and in Trixie it depends on
+# python3-matplotlib, which pulls in sympy and mpmath -- about 250 MB for tools
+# nobody runs. gpsd itself is here; DMRGateway links libgps directly.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
         php8.4-fpm php8.4-cli php8.4-mbstring php8.4-zip php8.4-readline \
@@ -111,7 +116,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         iptables fdisk openssh-client \
         libsamplerate0 libwxbase3.2-1t64 libgps30t64 libi2c0 libusb-0.1-4 \
         vnstat shellinabox avahi-daemon avahi-utils libnss-mdns \
-        gpsd gpsd-clients samba samba-common-bin \
+        gpsd samba samba-common-bin \
         miniupnpc dnsmasq hostapd wireless-tools iw nftables \
         python3 python3-luma.oled python3-serial python3-smbus2 \
         python3-psutil python3-configargparse python3-libgpiod i2c-tools \
