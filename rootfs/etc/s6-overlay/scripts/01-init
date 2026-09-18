@@ -1,0 +1,169 @@
+#!/command/with-contenv bash
+#
+# Container equivalent of the appliance's first-boot + /etc/rc.local work.
+# Idempotent: safe on every start, seeds only what is missing.
+#
+set -uo pipefail
+
+log() { echo "[wpsd-init] $*"; }
+
+DEFAULTS=/etc/wpsd-defaults
+
+# --- timezone ---------------------------------------------------------------
+# The dashboard also writes this through timedatectl; WPSD_TZ just sets the
+# starting value so a fresh container isn't stuck on UTC.
+if [[ -n ${WPSD_TZ:-} && -f /usr/share/zoneinfo/$WPSD_TZ ]]; then
+    if [[ $(cat /etc/timezone 2>/dev/null) != "$WPSD_TZ" ]]; then
+        echo "$WPSD_TZ" > /etc/timezone
+        ln -sf "/usr/share/zoneinfo/$WPSD_TZ" /etc/localtime
+        log "timezone -> $WPSD_TZ"
+    fi
+fi
+
+# --- machine-id -------------------------------------------------------------
+# The appliance has a machine-id-gen.service for this. logger and samba want it.
+if [[ ! -s /etc/machine-id ]]; then
+    tr -dc 'a-f0-9' < /dev/urandom | head -c 32 > /etc/machine-id
+    log "generated machine-id"
+fi
+
+# --- pseudo device-tree serial ----------------------------------------------
+# .wpsd-sys-cache reads /sys/firmware/devicetree/base/serial-number for the
+# dashboard's UUID field. /sys is read-only sysfs, so compose mounts a tmpfs at
+# /sys/firmware; without it the field simply renders empty.
+DT=/sys/firmware/devicetree/base
+if mkdir -p "$DT" 2>/dev/null && [[ ! -s $DT/serial-number ]]; then
+    printf '%s' "$(cut -c1-16 /etc/machine-id)" > "$DT/serial-number" 2>/dev/null \
+        && log "seeded device-tree serial-number" \
+        || log "note: /sys/firmware not writable, dashboard UUID will be blank"
+fi
+
+# --- restore persisted config ------------------------------------------------
+# Before seeding: anything the user configured through the dashboard on a previous
+# run lives in the wpsd-config volume and must win over the factory defaults.
+if [[ -d /etc/wpsd ]]; then
+    /usr/local/bin/wpsd-config-sync restore 2>&1 | sed 's/^/[wpsd-init] /'
+fi
+
+# --- seed /etc config files (never overwrite user edits) --------------------
+seeded=0
+shopt -s dotglob nullglob
+for src in "$DEFAULTS"/etc/*; do
+    name=$(basename "$src")
+    if [[ ! -e /etc/$name ]]; then
+        cp -a "$src" "/etc/$name"
+        seeded=$((seeded + 1))
+    fi
+done
+shopt -u dotglob nullglob
+(( seeded )) && log "seeded $seeded config file(s) into /etc"
+
+if [[ ! -e /var/www/.htpasswd && -f $DEFAULTS/htpasswd ]]; then
+    cp -a "$DEFAULTS/htpasswd" /var/www/.htpasswd
+    chown root:root /var/www/.htpasswd
+    log "seeded dashboard admin credentials (pi-star / raspberry)"
+fi
+
+# --- seed /usr/local/etc ----------------------------------------------------
+# Only the files wpsd-hostfile-update does NOT regenerate. The 39 MB of host and
+# talkgroup data is fetched at runtime by 02-hostfiles, not shipped in the image.
+mkdir -p /usr/local/etc
+for src in "$DEFAULTS"/usr-local-etc/*; do
+    name=$(basename "$src")
+    [[ -e /usr/local/etc/$name ]] || cp -a "$src" "/usr/local/etc/$name"
+done
+chgrp -R bin /usr/local/etc 2>/dev/null || true
+
+# --- runtime directories and ownership --------------------------------------
+mkdir -p /var/log/pi-star /var/log/wpsd /var/log/nginx /var/lib/wpsd-units \
+         /run/php /var/lib/php/sessions /var/lib/nginx/body /tmp
+# /var/lock is a symlink to /run/lock, and /run is a fresh tmpfs, so the
+# directory the appliance gets from its fstab has to be created here.
+# wpsd-hostfile-update and .wpsd-slipstream-tasks both flock a file in it.
+mkdir -p /run/lock && chmod 1777 /run/lock
+chown mmdvm:mmdvm /var/log/pi-star;      chmod 775 /var/log/pi-star
+chown www-data:www-data /run/php /var/lib/php/sessions /var/lib/nginx/body
+chmod 1777 /tmp
+touch /var/log/nginx/error.log /var/log/nginx/access.log
+: > /var/log/php8.4-fpm.log; chmod 644 /var/log/php8.4-fpm.log
+
+# --- suppress appliance-only boot work --------------------------------------
+# .wpsd-first-boot git-pulls all three repos and .wpsd-expand resizes the SD
+# card; neither applies here. Their own sentinel files are the documented way to
+# say "already done".
+mkdir -p /boot/firmware
+touch /boot/.WPSD_Booted /boot/firmware/.expanded
+
+# --- the in-place updaters ---------------------------------------------------
+# Three separate mechanisms rewrite the installation in place, and they need
+# separate handling because they are NOT equivalent:
+#
+#   .wpsd-nightly-tasks   git reset --hard origin/master over /usr/local/{bin,sbin}
+#                         and the dashboard. Would replace the natively-built
+#                         binaries with upstream's armhf ones.
+#                         -> not scheduled at all unless opted in; see
+#                            /etc/cron.d/wpsd-timers
+#   wpsd-update           the same thing, on demand from the dashboard's Update
+#                         button.  -> gated below
+#   .wpsd-slipstream-tasks  `curl -Ls <backend> | bash` as root, hourly.
+#                         Upstream's channel for pushing live fixes; unreviewed
+#                         remote code, and it can touch anything.  -> gated below
+#
+# Note what is deliberately NOT used here: OptIntoDiags = false. That is
+# upstream's own off switch for the updaters, but wpsd-hostfile-update honours the
+# same flag, and without host files the gateways cannot resolve a single
+# reflector or talkgroup. Killing call routing to stop an updater is the wrong
+# trade, so the updaters are gated individually and OptIntoDiags is left as the
+# user's choice.
+gate_script() {                         # gate_script <path> <message>
+    local target=$1 msg=$2
+    [[ -e $target ]] || return 0
+    [[ -e $target.upstream ]] && return 0       # already gated
+    mv "$target" "$target.upstream"
+    cat > "$target" <<GATE
+#!/usr/bin/env bash
+# Gate installed by wpsd-docker. The upstream script is $(basename "$target").upstream.
+# Set WPSD_ALLOW_SELF_UPDATE=1 to run it. See docs/ARCHITECTURE.md.
+if [[ -e /var/lib/wpsd-units/.self-update-allowed ]]; then
+    exec "$target.upstream" "\$@"
+fi
+echo "$msg" >&2
+exit 0
+GATE
+    chmod --reference="$target.upstream" "$target"
+    log "gated $(basename "$target")"
+}
+
+if [[ ${WPSD_ALLOW_SELF_UPDATE:-0} == 1 ]]; then
+    : > /var/lib/wpsd-units/.self-update-allowed
+    log "WARNING: WPSD_ALLOW_SELF_UPDATE=1 -- the nightly git reset will overwrite"
+    log "         the binaries this image built. Rebuild the image instead."
+else
+    rm -f /var/lib/wpsd-units/.self-update-allowed
+fi
+
+gate_script /usr/local/sbin/wpsd-update \
+    "wpsd-update: this is a container -- rebuild the image to update (docker compose build --pull)."
+gate_script /usr/local/sbin/.wpsd-slipstream-tasks \
+    "slipstream tasks: disabled in the container (it pipes remote code into bash as root)."
+
+# --- files WPSD greps unconditionally ---------------------------------------
+# .wpsd-common-funcs decides fwState from `grep -q LOGNDROP /etc/iptables.rules`
+# and the firewall script expects the file to exist. Seed an empty one so every
+# sourcing of that library doesn't emit a grep error.
+[[ -e /etc/iptables.rules ]] || : > /etc/iptables.rules
+
+# --- WPSD-release ------------------------------------------------------------
+# .wpsd-common-funcs greps Callsign out of this; .wpsd-sys-cache fills the rest.
+[[ -e /etc/WPSD-release ]] || : > /etc/WPSD-release
+
+# Fill it now rather than waiting for the first cron tick: index.php,
+# includes/messages.php and mmdvmhost/functions.php all parse this file, and an
+# empty one produces a page full of "Undefined array key WPSD" warnings.
+/usr/local/sbin/.wpsd-sys-cache >/dev/null 2>&1 || log "note: sys-cache incomplete on first run"
+
+# Adopt the current state into the volume, so a container that is killed before
+# the first cron tick still has its seeded config persisted.
+/usr/local/bin/wpsd-config-sync save -q 2>/dev/null || true
+
+log "init complete"

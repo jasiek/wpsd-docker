@@ -1,0 +1,12 @@
+[Unit]
+Description=YSF Parrot
+After=syslog.target network.target ysfgateway.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/ysfparrot.service start
+ExecStop=/usr/local/sbin/ysfparrot.service stop
+ExecReload=/usr/local/sbin/ysfparrot.service restart
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Run WPSD Modem Reset at Boot
+DefaultDependencies=no
+Before=mmdvmhost.timer
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wpsd-modemreset boot
+
+[Install]
+WantedBy=multi-user.target
+

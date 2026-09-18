@@ -1,0 +1,96 @@
+# WPSD in a container.
+#
+#   docker compose build          # compiles the radio daemons for this machine
+#   docker compose up -d
+#   open http://localhost:8080/   # admin pages: pi-star / raspberry
+#
+# With no modem attached the dashboard works and the radio daemons stay down,
+# which is exactly what the appliance does before Configuration is run. Set
+# Protocol=null under [Modem] for a hardware-free smoke test.
+
+services:
+  wpsd:
+    build:
+      context: .
+      args:
+        # Upstream treats architecture as a git branch. arm64 holds the
+        # 64-bit-clean sources and compiles for amd64 too; master is armhf.
+        WPSD_SRC_BRANCH: arm64
+    image: wpsd:local
+    container_name: wpsd
+    hostname: wpsd
+    restart: unless-stopped
+
+    ports:
+      - "${WPSD_HTTP_PORT:-8080}:80"
+      # - "2222:2222"      # shellinabox web terminal (WPSD_ENABLE_SHELLINABOX=1)
+
+    environment:
+      WPSD_TZ: Etc/UTC
+      # Nightly `git reset --hard origin/master` against /usr/local/{bin,sbin}
+      # and the dashboard. Leave at 0: it would replace the binaries built here
+      # with upstream's armhf ones. Rebuild the image to update instead.
+      WPSD_ALLOW_SELF_UPDATE: "0"
+      WPSD_ENABLE_AVAHI: "1"        # mDNS, so http://wpsd.local/ resolves
+      WPSD_ENABLE_VNSTAT: "1"       # network traffic graph on the dashboard
+      WPSD_ENABLE_SHELLINABOX: "0"  # web terminal
+      WPSD_ENABLE_GPSD: "0"         # needs WPSD_GPSD_DEVICE passed through
+      WPSD_ENABLE_SAMBA: "0"
+      WPSD_ENABLE_DNSMASQ: "0"      # AP mode only
+      WPSD_ENABLE_HOSTAPD: "0"      # AP mode only
+
+    volumes:
+      - wpsd-config:/etc/wpsd            # dashboard config, persisted by wpsd-config-sync
+      - wpsd-hostfiles:/usr/local/etc    # ~39 MB of host/talkgroup/DMR-ID data
+      - wpsd-logs:/var/log/pi-star       # last-heard history the dashboard reads
+      - wpsd-state:/var/lib/wpsd-units   # systemctl-shim unit state
+
+    tmpfs:
+      # .wpsd-sys-cache reads /sys/firmware/devicetree/base/serial-number for the
+      # dashboard's UUID field. /sys is read-only sysfs, so give it a writable
+      # tmpfs; 01-init seeds a stable pseudo-serial from /etc/machine-id.
+      - /sys/firmware:mode=755
+      # exec is required: s6-overlay execs /run/s6/basedir/bin/init, and Docker
+      # mounts tmpfs noexec by default.
+      - /run:exec,mode=755
+      - /tmp:exec,mode=1777,size=64m
+      - /var/lib/php/sessions:mode=0777,size=1m
+
+    # The modem. Pick one:
+    #
+    # 1. USB hotspot board (ZUMspot USB, MMDVM_HS on a USB adapter, ...):
+    # devices:
+    #   - /dev/ttyACM0:/dev/ttyACM0
+    #   then set Protocol=uart, UARTPort=/dev/ttyACM0
+    #
+    # 2. Network-attached modem -- no passthrough needed at all:
+    #   set Protocol=udp with ModemAddress/ModemPort under [Modem]
+    #
+    # 3. GPIO hat -- needs a real Raspberry Pi host:
+    # devices:
+    #   - /dev/ttyAMA0:/dev/ttyAMA0
+    #   - /dev/gpiomem:/dev/gpiomem
+    #   - /dev/i2c-1:/dev/i2c-1        # also enables OLED displays
+    #
+    # 4. No modem: Protocol=null. Dashboard and gateways run, nothing transmits.
+
+    cap_add:
+      # MMDVMHost runs itself at nice -10 for timing stability, which the
+      # appliance can do as root but a container cannot without this.
+      - SYS_NICE
+      # Uncomment for AP mode (also needs network_mode: host):
+      # - NET_ADMIN
+      # - NET_RAW
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1/"]
+      interval: 60s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
+
+volumes:
+  wpsd-config:
+  wpsd-hostfiles:
+  wpsd-logs:
+  wpsd-state:

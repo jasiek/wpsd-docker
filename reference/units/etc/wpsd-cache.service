@@ -1,0 +1,7 @@
+[Unit]
+Description=WPSD Sys Cache Service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/.wpsd-sys-cache
+

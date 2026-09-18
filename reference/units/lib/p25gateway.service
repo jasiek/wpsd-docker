@@ -1,0 +1,12 @@
+[Unit]
+Description=P25 Servce
+After=syslog.target network.target mmdvmhost.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/p25gateway.service start
+ExecStop=/usr/local/sbin/p25gateway.service stop
+ExecReload=/usr/local/sbin/p25gateway.service restart
+
+[Install]
+WantedBy=multi-user.target

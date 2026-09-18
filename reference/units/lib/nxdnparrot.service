@@ -1,0 +1,12 @@
+[Unit]
+Description=NXDN Parrot
+After=syslog.target network.target nxdngateway.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/nxdnparrot.service start
+ExecStop=/usr/local/sbin/nxdnparrot.service stop
+ExecReload=/usr/local/sbin/nxdnparrot.service restart
+
+[Install]
+WantedBy=multi-user.target

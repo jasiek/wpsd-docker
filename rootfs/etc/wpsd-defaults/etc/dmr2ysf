@@ -1,0 +1,46 @@
+[YSF Network]
+Callsign=WPSD42
+GatewayAddress=127.0.0.1
+GatewayPort=4200
+LocalAddress=127.0.0.1
+LocalPort=3200
+FCSRooms=/usr/local/etc/FCSHosts.txt
+# RadioID=*****
+# FICHCallsign=2
+# FICHCallMode=0
+# FICHFrameTotal=6
+# FICHMessageRoute=0
+# FICHVOIP=0
+# FICHDataType=2
+# FICHSQLType=0
+# FICHSQLCode=0
+DT1=1,34,97,95,43,3,17,0,0,0
+DT2=0,0,0,0,108,32,28,32,3,8
+Debug=0
+Daemon=1
+Suffix=R
+
+[DMR Network]
+Id=1234567
+RptAddress=127.0.0.1
+RptPort=62034
+LocalAddress=127.0.0.1
+LocalPort=62033
+DefaultDstTG=9
+TGUnlink=4000
+TGListFile=/usr/local/etc/TGList_YSF.txt
+Debug=0
+
+[DMR Id Lookup]
+File=/usr/local/etc/DMRIds.dat
+Time=24
+
+[Log]
+DisplayLevel=0
+FileLevel=2
+FilePath=/var/log/pi-star
+FileRoot=DMR2YSF
+
+[Enabled]
+Enabled=0
+

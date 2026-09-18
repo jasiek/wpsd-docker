@@ -1,0 +1,12 @@
+[Unit]
+Description=Pi-Star YSF2NXDN Service
+After=syslog.target network.target mmdvmhost.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/ysf2nxdn.service start
+ExecStop=/usr/local/sbin/ysf2nxdn.service stop
+ExecReload=/usr/local/sbin/ysf2nxdn.service restart
+
+[Install]
+WantedBy=multi-user.target

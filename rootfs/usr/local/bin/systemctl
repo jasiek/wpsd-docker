@@ -1,0 +1,312 @@
+#!/usr/bin/env bash
+#
+# systemctl(1) shim for WPSD in a container.
+#
+# WPSD drives every service through systemctl: the dashboard shells out to
+# `sudo systemctl ...` in 47 places, pistar-watchdog polls `is-active` and
+# issues `restart`, and wpsd-services start/stop is nothing but a list of
+# systemctl calls. There is no systemd in a container, so this stands in.
+#
+# It is small because WPSD's own unit files are already delegating shells --
+# every radio unit is four lines wrapping /usr/local/sbin/<unit>.service, and
+# those scripts implement start|stop|restart|status themselves. This shim
+# routes to them rather than reimplementing service management.
+#
+# Units fall into five classes; see docs/SYSTEMCTL-SHIM.md.
+#   1 script   a /usr/local/sbin/<unit>.service wrapper exists -> delegate
+#   2 s6       a long-running process s6 supervises        -> s6-svc
+#   3 timer    a *.timer -> schedule lives in /etc/cron.d/wpsd-timers
+#   4 noop     hardware/boot-media units with no container meaning
+#   5 state    enable/disable/mask/... -> marker files, no process involved
+#
+set -uo pipefail
+
+STATE_DIR=${WPSD_UNIT_STATE:-/var/lib/wpsd-units}
+SBIN=/usr/local/sbin
+S6_SERVICE_DIR=${WPSD_S6_SERVICE_DIR:-/run/service}
+LOG_TAG=wpsd-systemctl
+
+# sudo resets PATH to secure_path, which does not include /command, so resolve
+# the s6 tools by absolute path with a PATH lookup as the fallback.
+S6_SVC=$(command -v s6-svc 2>/dev/null || echo /command/s6-svc)
+S6_SVSTAT=$(command -v s6-svstat 2>/dev/null || echo /command/s6-svstat)
+[[ -x $S6_SVC ]]    || S6_SVC=/command/s6-svc
+[[ -x $S6_SVSTAT ]] || S6_SVSTAT=/command/s6-svstat
+
+mkdir -p "$STATE_DIR" 2>/dev/null || true
+
+debug() { [[ -n ${WPSD_SHIM_DEBUG:-} ]] && echo "$LOG_TAG: $*" >&2; return 0; }
+
+# --- unit name handling -----------------------------------------------------
+# "ysfgateway.service" -> base ysfgateway, type service
+# "ysfgateway"         -> base ysfgateway, type service  (systemd's own default)
+unit_base() { local u=${1%.service}; u=${u%.timer}; u=${u%.socket}; u=${u%.target}; u=${u%.mount}; echo "$u"; }
+unit_type() {
+    case $1 in
+        *.timer)  echo timer  ;; *.socket) echo socket ;;
+        *.target) echo target ;; *.mount)  echo mount  ;;
+        *)        echo service ;;
+    esac
+}
+
+# --- s6 mapping -------------------------------------------------------------
+# Only the processes s6 actually supervises. Anything else that is a real
+# daemon on the appliance but meaningless here lands in the noop class.
+s6_name() {
+    case $1 in
+        nginx)                      echo nginx        ;;
+        php-fpm|php8.4-fpm|php8.2-fpm|php7.4-fpm) echo php-fpm ;;
+        cron|crond)                 echo cron         ;;
+        avahi-daemon|avahi)         echo avahi        ;;
+        vnstat)                     echo vnstat       ;;
+        shellinabox)                echo shellinabox  ;;
+        gpsd)                       echo gpsd         ;;
+        # s6 runs the watchdog directly. Its wrapper script declares
+        # DAEMON=python while the process comm is python3, so the pgrep path
+        # would never match -- and s6 knows the truth anyway.
+        pistar-watchdog)            echo pistar-watchdog ;;
+        smbd|nmbd|samba)            echo samba        ;;
+        dnsmasq)                    echo dnsmasq      ;;
+        hostapd)                    echo hostapd      ;;
+        *)                          return 1          ;;
+    esac
+}
+
+# Units that are genuinely satisfied by the container runtime, so reporting them
+# active is the honest answer rather than a lie: the clock IS synchronised, by
+# the host.
+always_active() {
+    case $1 in
+        systemd-timesyncd|systemd-journald|dbus|systemd-logind|\
+        network|networking|network-online|multi-user|basic|sysinit) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# --- class 1: script-backed units -------------------------------------------
+script_for() { local s="$SBIN/$1.service"; [[ -x $s ]] && echo "$s"; }
+
+# The wrapper script names its own process: `DAEMON=MMDVMHost`. Reading it from
+# the script we are driving keeps the table correct when upstream adds or
+# renames a daemon -- /usr/local/sbin is a live git clone that upstream resets.
+daemon_of() {
+    local s="$SBIN/$1.service" d
+    [[ -r $s ]] || return 1
+    d=$(sed -n 's/^DAEMON=//p' "$s" | head -1)
+    d=${d%\"}; d=${d#\"}
+    [[ -n $d ]] && echo "$d"
+}
+
+# --- state markers (class 5) ------------------------------------------------
+marker() { echo "$STATE_DIR/$1.$2"; }
+is_masked()  { [[ -e $(marker "$1" masked) ]]; }
+is_enabled_unit() {
+    is_masked "$1" && return 1
+    [[ -e $(marker "$1" disabled) ]] && return 1
+    return 0   # units ship enabled on the appliance; absence of a marker = enabled
+}
+set_state() {
+    local base=$1 what=$2
+    case $what in
+        enable|reenable|preset) rm -f "$(marker "$base" disabled)" "$(marker "$base" masked)" ;;
+        disable)                : > "$(marker "$base" disabled)" ;;
+        mask)                   : > "$(marker "$base" masked)"; : > "$(marker "$base" disabled)" ;;
+        unmask)                 rm -f "$(marker "$base" masked)" ;;
+    esac
+}
+
+# --- activity ---------------------------------------------------------------
+unit_is_active() {
+    local base=$1 type=$2 svc daemon
+    is_masked "$base" && return 1
+
+    if [[ $type == timer ]]; then
+        # A timer is "active" when its schedule is installed and not disabled.
+        [[ -e $(marker "$base" disabled) ]] && return 1
+        return 0
+    fi
+
+    always_active "$base" && return 0
+
+    if svc=$(s6_name "$base"); then
+        [[ $("$S6_SVSTAT" -o up "$S6_SERVICE_DIR/$svc" 2>/dev/null) == true ]]
+        return $?
+    fi
+
+    if daemon=$(daemon_of "$base"); then
+        # pgrep -x matches the process's comm, which for anything started through
+        # a shebang script is the interpreter (python3, bash), not the script. Try
+        # the exact comm first, then the full command line.
+        pgrep -x "$daemon" >/dev/null 2>&1 && return 0
+        pgrep -f "/${daemon}\b" >/dev/null 2>&1 && return 0
+        return 1
+    fi
+
+    return 1
+}
+
+# --- verb implementations ---------------------------------------------------
+do_start() {
+    local base=$1 type=$2 s svc
+    is_masked "$base" && { debug "$base is masked, refusing start"; return 1; }
+    [[ $type == timer ]] && { debug "timer $base -> cron, no-op"; return 0; }
+
+    if svc=$(s6_name "$base"); then
+        "$S6_SVC" -u "$S6_SERVICE_DIR/$svc" 2>/dev/null; return 0
+    fi
+    if s=$(script_for "$base"); then
+        "$s" start >/dev/null 2>&1; return 0
+    fi
+    debug "no handler for $base, treating start as satisfied"
+    return 0
+}
+
+do_stop() {
+    local base=$1 type=$2 s svc
+    [[ $type == timer ]] && return 0
+
+    if svc=$(s6_name "$base"); then
+        "$S6_SVC" -d "$S6_SERVICE_DIR/$svc" 2>/dev/null; return 0
+    fi
+    if s=$(script_for "$base"); then
+        "$s" stop >/dev/null 2>&1; return 0
+    fi
+    return 0
+}
+
+do_restart() {
+    local base=$1 type=$2 s svc
+    is_masked "$base" && return 1
+    [[ $type == timer ]] && return 0
+
+    if svc=$(s6_name "$base"); then
+        "$S6_SVC" -r "$S6_SERVICE_DIR/$svc" 2>/dev/null; return 0
+    fi
+    if s=$(script_for "$base"); then
+        "$s" restart >/dev/null 2>&1; return 0
+    fi
+    return 0
+}
+
+# `systemctl status X` output is PARSED by WPSD, not just shown:
+#   .wpsd-display-driver-helper:  status nextiondriver.service | grep 'disabled;'
+#   .wpsd-nightly-tasks:          status nextiondriver.service | grep masked
+#   admin/sysinfo.php:            status systemd-timesyncd.service | grep -o running
+# so the Loaded: and Active: lines must carry the same keywords systemd emits.
+do_status() {
+    local base=$1 type=$2 loaded active
+    if is_masked "$base"; then
+        loaded="masked (Reason: Unit $base.$type is masked.)"
+    elif is_enabled_unit "$base"; then
+        loaded="loaded (/etc/systemd/system/$base.$type; enabled; preset: enabled)"
+    else
+        loaded="loaded (/etc/systemd/system/$base.$type; disabled; preset: enabled)"
+    fi
+
+    if unit_is_active "$base" "$type"; then
+        active="active (running) since $(date -u '+%a %Y-%m-%d %H:%M:%S UTC')"
+    else
+        active="inactive (dead)"
+    fi
+
+    printf '\xe2\x97\x8f %s.%s - %s\n' "$base" "$type" "$base"
+    printf '     Loaded: %s\n' "$loaded"
+    printf '     Active: %s\n' "$active"
+    unit_is_active "$base" "$type"
+}
+
+# The dashboard's reboot button and wpsd-system-manager expect the machine to
+# go down. In a container that means recycling PID 1, so the orchestrator's
+# restart policy brings it back.
+do_container_halt() {
+    local action=$1
+    echo "$LOG_TAG: $action requested -> stopping WPSD services and recycling container" >&2
+    "$SBIN/wpsd-services" fullstop >/dev/null 2>&1
+    if [[ -x /run/s6/basedir/bin/halt ]]; then
+        exec /run/s6/basedir/bin/halt
+    fi
+    kill -TERM 1
+}
+
+# --- argument parsing -------------------------------------------------------
+QUIET=0
+ARGS=()
+for a in "$@"; do
+    case $a in
+        -q|--quiet)   QUIET=1 ;;
+        --no-pager|--no-ask-password|--no-block|--no-legend|--system|--user|\
+        --now|--force|-f|-l|--full|--plain|--all|-a) ;;   # accepted and ignored
+        --*|-*)       debug "ignoring flag $a" ;;
+        *)            ARGS+=("$a") ;;
+    esac
+done
+
+VERB=${ARGS[0]:-}
+UNITS=("${ARGS[@]:1}")
+rc=0
+
+case $VERB in
+    reboot|poweroff|halt|kexec|soft-reboot)  do_container_halt "$VERB" ;;
+
+    daemon-reload|daemon-reexec|reset-failed|set-default|link|revert|\
+    isolate|default|reload-or-restart|try-restart|condrestart)
+        # No unit database to reload; try-restart-ish verbs fall through to
+        # restart so callers that use them still get the effect they wanted.
+        case $VERB in
+            reload-or-restart|try-restart|condrestart)
+                for u in "${UNITS[@]}"; do
+                    do_restart "$(unit_base "$u")" "$(unit_type "$u")" || rc=1
+                done ;;
+        esac
+        ;;
+
+    show|cat|list-units|list-unit-files|list-timers|list-sockets|list-dependencies)
+        for u in "${UNITS[@]}"; do
+            b=$(unit_base "$u"); t=$(unit_type "$u")
+            if unit_is_active "$b" "$t"; then s=active; else s=inactive; fi
+            printf '%s.%s loaded %s\n' "$b" "$t" "$s"
+        done
+        ;;
+
+    "")
+        echo "Usage: systemctl VERB [UNIT...]   (WPSD container shim)" >&2
+        rc=1
+        ;;
+
+    *)
+        [[ ${#UNITS[@]} -eq 0 ]] && exit 0
+        for u in "${UNITS[@]}"; do
+            base=$(unit_base "$u")
+            type=$(unit_type "$u")
+            case $VERB in
+                start)      do_start   "$base" "$type" || rc=1 ;;
+                stop)       do_stop    "$base" "$type" || rc=1 ;;
+                restart|reload|force-reload)
+                            do_restart "$base" "$type" || rc=1 ;;
+                enable|disable|mask|unmask|reenable|preset)
+                            set_state "$base" "$VERB" ;;
+                is-active)
+                            if unit_is_active "$base" "$type"; then
+                                [[ $QUIET -eq 1 ]] || echo active
+                            else
+                                [[ $QUIET -eq 1 ]] || echo inactive
+                                rc=3
+                            fi ;;
+                is-enabled)
+                            if is_masked "$base"; then
+                                [[ $QUIET -eq 1 ]] || echo masked; rc=1
+                            elif is_enabled_unit "$base"; then
+                                [[ $QUIET -eq 1 ]] || echo enabled
+                            else
+                                [[ $QUIET -eq 1 ]] || echo disabled; rc=1
+                            fi ;;
+                is-failed)  rc=1 ;;
+                status)     do_status "$base" "$type" || rc=3 ;;
+                kill)       d=$(daemon_of "$base") && pkill -x "$d" ;;
+                *)          debug "unhandled verb '$VERB' for $u -> success" ;;
+            esac
+        done
+        ;;
+esac
+
+exit $rc

@@ -1,0 +1,17 @@
+[Unit]
+Description=Stop NextionDriver during shutdown/reboot - Bookworm version
+DefaultDependencies=no
+Before=poweroff.target reboot.target halt.target shutdown.target
+Conflicts=reboot.target halt.target shutdown.target
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/true
+ExecStop=/bin/bash -c "/usr/bin/pkill -f /usr/local/bin/NextionDriver"
+ExecStopPost=/bin/sleep 5
+RemainAfterExit=yes
+
+[Install]
+WantedBy=poweroff.target shutdown.target
+

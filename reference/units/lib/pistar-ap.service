@@ -1,0 +1,13 @@
+[Unit]
+Description=Pi-Star HostAPD Service
+After=syslog.target network.target
+
+[Service]
+Type=notify
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/pistar-ap.service start
+ExecStop=/usr/local/sbin/pistar-ap.service stop
+ExecReload=/usr/local/sbin/pistar-ap.service restart
+
+[Install]
+WantedBy=multi-user.target

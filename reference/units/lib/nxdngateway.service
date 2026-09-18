@@ -1,0 +1,12 @@
+[Unit]
+Description=NXDN Servce
+After=syslog.target network.target mmdvmhost.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/nxdngateway.service start
+ExecStop=/usr/local/sbin/nxdngateway.service stop
+ExecReload=/usr/local/sbin/nxdngateway.service restart
+
+[Install]
+WantedBy=multi-user.target

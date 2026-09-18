@@ -1,0 +1,19 @@
+# 20250525_1
+[Unit]
+Description=Run WPSD NX Text Update on Pre-Shutdown
+DefaultDependencies=no
+After=nextiondriver.service
+Before=poweroff.target
+Conflicts=multi-user.target
+ConditionPathExists=!/run/systemd/reboot
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/local/sbin/.wpsd-nextion-text.py "t0" "Shutting Down..." ; /usr/local/sbin/.wpsd-nextion-text.py "t1" "Don't remove pwr..."
+Environment=SYSTEMD_INHIBIT_DELAY_MAX_USEC=0
+
+[Install]
+WantedBy=poweroff.target
+

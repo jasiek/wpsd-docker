@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# poweroff(8) shim -- the dashboard offers reboot/shutdown buttons. In a container
+# that means recycling PID 1 and letting the restart policy decide.
+exec /usr/local/bin/systemctl poweroff

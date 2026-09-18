@@ -1,0 +1,12 @@
+[Unit]
+Description=Yaesu System Fusion Servce
+After=syslog.target network.target mmdvmhost.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/ysfgateway.service start
+ExecStop=/usr/local/sbin/ysfgateway.service stop
+ExecReload=/usr/local/sbin/ysfgateway.service restart
+
+[Install]
+WantedBy=multi-user.target

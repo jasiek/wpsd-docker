@@ -1,0 +1,17 @@
+# 20250525_1
+[Unit]
+Description=Run WPSD NX Text Update on Shutdown (After Unmount)
+DefaultDependencies=no
+After=umount.target
+Before=final.target
+Conflicts=reboot.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/.wpsd-nextion-text.py "t0" "Safe to Power Off" ; /usr/local/sbin/.wpsd-nextion-text.py "t1" "Shutdown Complete"
+Environment=SYSTEMD_INHIBIT_DELAY_MAX_USEC=0
+
+[Install]
+WantedBy=final.target
+

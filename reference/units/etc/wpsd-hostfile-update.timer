@@ -1,0 +1,10 @@
+[Unit]
+Description=Run WPSD Hostfile Updater at random intervals
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=3600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

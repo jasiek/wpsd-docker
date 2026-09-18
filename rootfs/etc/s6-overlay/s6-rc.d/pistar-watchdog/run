@@ -1,0 +1,5 @@
+#!/command/with-contenv bash
+# WPSD's own supervisor: polls `systemctl is-active` for every enabled mode and
+# restarts what died. With the systemctl shim in place it supervises all ~20
+# radio daemons unchanged, which is why s6 does not need to know about them.
+exec /usr/local/sbin/pistar-watchdog

@@ -1,0 +1,102 @@
+server_names_hash_bucket_size 64;
+
+server {
+	listen 80;
+	server_name www.msftconnecttest.com www.msftncsi.com clients3.google.com;
+	return 302 http://10.42.42.251/index.php;
+}
+
+server {
+	listen 80;
+	server_name connectivitycheck.gstatic.com connectivitycheck.android.com;
+	return 302 http://10.42.42.251/index.php;
+}
+
+server {
+	listen 80;
+	server_name www.appleiphonecell.com captive.apple.com www.apple.com www.apple.com.edgekey.net;
+	return 302 http://10.42.42.251/index.php;
+}
+
+# add'l common checks...
+
+# Firefox (Mozilla)
+server {
+    listen 80;
+    server_name detectportal.firefox.com;
+    return 302 http://10.42.42.251/index.php;
+}
+
+# Windows (more specific checks, including legacy and current)
+server {
+    listen 80;
+    server_name www.msftconnecttest.com www.msftncsi.com ipv6.msftncsi.com ipv6.msftncsi.com.edgesuite.net teredo.ipv6.microsoft.com teredo.ipv6.microsoft.com.nsatc.net edge-http.microsoft.com;
+    return 302 http://10.42.42.251/index.php;
+}
+
+# Android (additional Google domains)
+server {
+    listen 80;
+    server_name clients3.google.com connectivitycheck.gstatic.com connectivitycheck.android.com;
+    return 302 http://10.42.42.251/index.php;
+}
+
+# Ubuntu/NetworkManager (Gnome)
+server {
+    listen 80;
+    server_name nmcheck.gnome.org;
+    return 302 http://10.42.42.251/index.php;
+}
+
+# KDE Plasma
+server {
+    listen 80;
+    server_name networkcheck.kde.org;
+    return 302 http://10.42.42.251/index.php;
+}
+
+# Other common general checks
+server {
+    listen 80;
+    server_name neverssl.com example.com; # often used by users to trigger a portal if automatic detection fails
+    return 302 http://10.42.42.251/index.php;
+}
+
+# For devices that might probe other common sites
+server {
+    listen 80;
+    server_name www.google.com www.bing.com; # Some devices might try to access these first.
+    return 302 http://10.42.42.251/index.php;
+}
+
+# ConnMan (Linux network connection manager)
+server {
+    listen 80;
+    server_name ipv4.connman.net;
+    return 302 http://10.42.42.251/index.php;
+}
+
+server {
+        listen 10.42.42.251:80;
+        root /var/www/dashboard;
+
+	try_files $uri $uri/ /index.php;
+
+        location ^~ /admin {
+		deny	10.42.42.251;
+		allow	10.42.42.0/24;
+		deny	all;
+		try_files $uri $uri/ =404;
+		client_max_body_size 512K;
+
+	# Load the defaults
+	include             /etc/nginx/default.d/php.conf;
+	}
+
+	location ~ /\.git {
+		deny all;
+	}
+
+	# Load the defaults
+	include             /etc/nginx/default.d/*.conf;
+}

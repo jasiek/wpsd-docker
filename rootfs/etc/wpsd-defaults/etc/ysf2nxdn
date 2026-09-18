@@ -1,0 +1,67 @@
+[Info]
+RXFrequency=431150000
+TXFrequency=431150000
+Latitude=0
+Longitude=0
+Height=0
+Description=WPSD42_WPSD
+Location="Town, L0C4T0R"
+URL=https://wpsd.radio
+
+[YSF Network]
+Callsign=WPSD42
+Suffix=Y
+DstAddress=127.0.0.1
+DstPort=42000
+LocalAddress=127.0.0.1
+LocalPort=42014
+EnableWiresX=1
+WiresXMakeUpper=0
+# RadioID=*****
+# FICHCallsign=2
+# FICHCallMode=0
+# FICHBlockTotal=0
+# FICHFrameTotal=6
+# FICHMessageRoute=0
+# FICHVOIP=0
+# FICHDataType=2
+# FICHSQLType=0
+# FICHSQLCode=0
+# DT1=1,34,97,95,43,3,17,0,0,0
+# DT2=0,0,0,0,108,32,28,32,3,8
+Daemon=1
+DT1=1,34,97,95,43,3,17,0,0,0
+DT2=0,0,0,0,108,32,28,32,3,8
+
+[NXDN Network]
+Id=12345
+StartupDstId=1200
+LocalAddress=127.0.0.1
+LocalPort=14021
+DstAddress=127.0.0.1
+DstPort=14020
+TGListFile=/usr/local/etc/TGList_NXDN.txt
+Debug=0
+
+[NXDN Id Lookup]
+File=/usr/local/etc/NXDN.csv
+Time=24
+
+[Log]
+DisplayLevel=0
+FileLevel=2
+FilePath=/var/log/pi-star
+FileRoot=YSF2NXDN
+
+[aprs.fi]
+Enable=0
+Server=euro.aprs2.net
+Port=14580
+Password=17348
+APIKey=Apikey
+Refresh=240
+Description=WPSD42_WPSD
+
+[Enabled]
+Enabled=0
+

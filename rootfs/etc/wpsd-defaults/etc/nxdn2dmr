@@ -1,0 +1,53 @@
+[Info]
+RXFrequency=430000000
+TXFrequency=430000000
+Power=1
+Latitude=50.0
+Longitude=0.0
+Height=0
+Location=A Town, L0C4T0R
+Description=Country, UK
+URL=https://wpsd.radio
+
+[NXDN Network]
+Callsign=M1ABC
+TG=20
+DstAddress=127.0.0.1
+DstPort=14050
+LocalAddress=127.0.0.1
+LocalPort=42022
+DefaultID=65519
+Daemon=1
+
+[DMR Network]
+Id=1234567
+#XLXFile=/usr/local/etc/XLXHosts.txt
+#XLXReflector=950
+#XLXModule=D
+StartupDstId=9990
+# For TG call: StartupPC=0
+StartupPC=1
+Address=44.131.4.1
+Port=62031
+Jitter=500
+# Local=62032
+Password=PASSWORD
+# Options=
+Debug=0
+
+[DMR Id Lookup]
+File=/usr/local/etc/DMRIds.dat
+Time=24
+
+[NXDN Id Lookup]
+File=/usr/local/etc/NXDN.csv
+Time=24
+
+[Log]
+DisplayLevel=0
+FileLevel=0
+FilePath=/var/log/pi-star
+FileRoot=NXDN2DMR
+
+[Enabled]
+Enabled=0

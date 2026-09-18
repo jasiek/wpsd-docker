@@ -1,0 +1,25 @@
+# WPSD periodic work. Replaces these systemd timers 1:1:
+#
+#   wpsd-cache.timer           OnCalendar=*-*-* *:*:00
+#   wpsd-log-cleanup.timer     OnUnitActiveSec=1min
+#   wpsd-running-tasks.timer   OnCalendar=*:0/1:00   RandomizedDelaySec=1h
+#   wpsd-hostfile-update.timer OnCalendar=hourly     RandomizedDelaySec=3600
+#   wpsd-nightly-tasks.timer   OnCalendar=01:00      RandomizedDelaySec=2h59m
+#
+# The randomised delays are not cosmetic: upstream spreads thousands of hotspots
+# across the hour so they do not stampede W0CHP's servers. cron has no
+# equivalent, so the jitter is a sleep prefix. A literal % must be escaped in a
+# crontab, hence \%.
+#
+# cron does not inherit the container environment, so the nightly self-updater is
+# gated on the marker 01-init writes from $WPSD_ALLOW_SELF_UPDATE, not on the
+# variable itself.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+*  * * * * root  /usr/local/sbin/.wpsd-sys-cache >/dev/null 2>&1
+*  * * * * root  /usr/local/bin/wpsd-config-sync save -q >/dev/null 2>&1
+*  * * * * mmdvm /usr/local/sbin/.wpsd-log-cleanup >/dev/null 2>&1
+0  * * * * root  sleep $((RANDOM \% 3600)); /usr/local/sbin/.wpsd-running-tasks >/dev/null 2>&1
+17 * * * * root  sleep $((RANDOM \% 1800)); /usr/local/sbin/wpsd-hostfile-update >/dev/null 2>&1
+0  1 * * * root  test -e /var/lib/wpsd-units/.self-update-allowed && { sleep $((RANDOM \% 10740)); /usr/local/sbin/.wpsd-nightly-tasks >/dev/null 2>&1; }

@@ -1,0 +1,8 @@
+The `user` bundle stays here rather than in /etc/s6-overlay/user-bundles.d/.
+
+s6-overlay 3.2 prints a deprecation warning for this location and points at
+user-bundles.d, but moving the bundle there (as user-bundles.d/user/contents.d
+plus a `type` file containing "bundle") results in s6-rc starting none of these
+services: the container comes up with only s6's own internal services running.
+The warning is cosmetic; a container that starts nothing is not. Revisit when
+s6-overlay documents the replacement layout concretely.

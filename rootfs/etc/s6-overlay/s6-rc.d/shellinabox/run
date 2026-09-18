@@ -1,0 +1,8 @@
+#!/command/with-contenv bash
+if [ "${WPSD_ENABLE_SHELLINABOX:-0}" != "1" ]; then
+    echo "shellinabox: disabled (WPSD_ENABLE_SHELLINABOX != 1)" >&2
+    /command/s6-svc -d /run/service/shellinabox
+    exec /command/s6-pause
+fi
+exec /usr/bin/shellinaboxd --no-browser --disable-ssl \
+     --port=2222 --user=shellinabox --group=shellinabox

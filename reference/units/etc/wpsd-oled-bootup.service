@@ -1,0 +1,15 @@
+[Unit]
+Description=Run WPSD OLED Text Update on Bootup
+DefaultDependencies=no
+Before=mmdvmhost.service
+After=local-fs.target
+RequiresMountsFor=/dev/i2c-1
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/.wpsd-oled.text.py --text1 "WPSD Booting up..." --text2 "Please wait..."
+Environment=SYSTEMD_INHIBIT_DELAY_MAX_USEC=0
+
+[Install]
+WantedBy=local-fs.target

@@ -1,0 +1,14 @@
+# The appliance grants www-data unrestricted passwordless sudo, and the dashboard
+# depends on it: 167 `sudo sed`, 56 `sudo chmod`, 47 `sudo systemctl`. The web UI
+# *is* the configuration-management layer, so this is not a hardening
+# opportunity -- narrowing it breaks every admin page.
+#
+# Threat model note: reaching this requires getting past the dashboard's HTTP
+# basic auth on /admin. Do not expose the container's port 80 to a hostile
+# network. See docs/HARDWARE.md.
+www-data ALL=(ALL) NOPASSWD: ALL
+pi-star  ALL=(ALL) NOPASSWD: ALL
+
+# Match the appliance's secure_path so `sudo systemctl` resolves the shim in
+# /usr/local/bin rather than a real systemd binary further down the path.
+Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

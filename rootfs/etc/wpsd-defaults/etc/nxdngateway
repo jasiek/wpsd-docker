@@ -1,0 +1,71 @@
+[General]
+Callsign=WPSD42
+Suffix=N
+# RptProtocol=Icom
+# RptAddress=1.2.3.4
+# RptPort=41300
+# LocalPort=41300
+RptProtocol=Icom
+RptAddress=127.0.0.1
+RptPort=14021
+LocalPort=14020
+Debug=0
+Daemon=1
+
+[Info]
+RXFrequency=431150000
+TXFrequency=431150000
+Power=1
+Latitude=0
+Longitude=0
+Height=0
+Name="Town, L0C4T0R"
+Description="Country"
+
+[Voice]
+Enabled=1
+Language=en_GB
+Directory=/usr/local/etc/NXDN_Audio
+
+[APRS]
+Enable=0
+Address=127.0.0.1
+Port=8673
+Suffix="Wi"
+Description=APRS for NXDNGateway
+Symbol="Wi"
+
+[Id Lookup]
+Name=/usr/local/etc/NXDN.csv
+Time=0
+
+[Log]
+DisplayLevel=0
+FileLevel=1
+FilePath=/var/log/pi-star
+FileRoot=NXDNGateway
+
+[Network]
+Port=14050
+HostsFile1=/usr/local/etc/NXDNHosts.txt
+HostsFile2=/usr/local/etc/NXDNHostsLocal.txt
+ReloadTime=0
+ParrotAddress=127.0.0.1
+ParrotPort=42021
+NXDN2DMRAddress=127.0.0.1
+NXDN2DMRPort=42022
+InactivityTimeout=10
+Debug=0
+RFHangTime=0
+NetHangTime=0
+Static=65000
+
+[GPSD]
+Enable=0
+Port=2947
+Address=127.0.0.1
+
+[Remote Commands]
+Enable=1
+Port=6075
+

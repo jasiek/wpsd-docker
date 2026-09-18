@@ -1,0 +1,9 @@
+# Upstream appliance image — 3.8 GB, never commit
+*.img
+*.img.xz
+
+# Reference assets extracted from the image at dev time
+reference/rootfs/
+
+# Build scratch
+.build/

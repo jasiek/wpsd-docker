@@ -1,0 +1,13 @@
+[Unit]
+Description=PiStar-UPnP network service
+After=network-online.target ircddbgateway.timer
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/local/sbin/pistar-upnp.service start
+ExecStopPost=/usr/local/sbin/pistar-upnp.service stop
+
+[Install]
+WantedBy=multi-user.target

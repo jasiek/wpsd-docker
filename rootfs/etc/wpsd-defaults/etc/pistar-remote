@@ -1,0 +1,42 @@
+[banner]
+# Pi-Star Remote config file
+# This config file is desiged for the Pi-Star Keeper remote control
+# The remote control system is designed to give repeater keepers an
+# RF KillSwitch for their repeaters.
+
+[enable]
+# Is the Pi-Star Remote Enabled? (true|false)
+enabled=false
+
+[keeper]
+# Keepers Information
+callsign=M1ABC
+
+[d-star]
+# UR fields
+svckill=SVCKILL
+svcrestart=SVCRSTRT
+reboot=REBOOTPI
+#shutdown=SHUTDOWN
+#8Ball=8BALL
+
+[dmr]
+# TG commands
+svckill=9999999
+svcrestart=9999998
+reboot=9999997
+#shutdown=9999996
+
+[ysf]
+# ROOM commands
+svckill=99999
+svcrestart=99998
+reboot=99997
+#shutdown=99996
+
+[p25]
+# P25 Talkgroups are limited to 1->65535
+svckill=65531
+svcrestart=65532
+reboot=65533
+#shutdown=65534

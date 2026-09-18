@@ -1,0 +1,8 @@
+#!/command/with-contenv bash
+if [ "${WPSD_ENABLE_VNSTAT:-0}" != "1" ]; then
+    echo "vnstat: disabled (WPSD_ENABLE_VNSTAT != 1)" >&2
+    /command/s6-svc -d /run/service/vnstat
+    exec /command/s6-pause
+fi
+mkdir -p /var/lib/vnstat && chown vnstat:vnstat /var/lib/vnstat
+exec /usr/sbin/vnstatd -n --alwaysadd

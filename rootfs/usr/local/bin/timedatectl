@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# timedatectl(1) shim. The dashboard's timezone selector calls set-timezone 9
+# times and reads list-timezones; the NTP panel calls timesync-status. A
+# container inherits the host clock, so time IS synchronised -- report that
+# rather than pretending a local NTP daemon exists.
+set -uo pipefail
+ZONEINFO=/usr/share/zoneinfo
+case ${1:-status} in
+    set-timezone)
+        tz=${2:?timezone required}
+        [[ -f $ZONEINFO/$tz ]] || { echo "Failed to set time zone: Invalid time zone '$tz'" >&2; exit 1; }
+        echo "$tz" > /etc/timezone
+        ln -sf "$ZONEINFO/$tz" /etc/localtime
+        ;;
+    list-timezones)
+        find "$ZONEINFO" -type f -not -name '*.tab' -not -name 'leap*' \
+             -printf '%P\n' 2>/dev/null | grep -E '^[A-Z][A-Za-z_]+/' | sort
+        ;;
+    timesync-status)
+        printf '       Server: host (container inherits host clock)\n'
+        printf 'Poll interval: n/a\n'
+        printf '         Sync: yes\n'
+        ;;
+    show)
+        printf 'Timezone=%s\nNTP=yes\nNTPSynchronized=yes\n' "$(cat /etc/timezone 2>/dev/null || echo UTC)"
+        ;;
+    *)
+        printf '               Local time: %s\n' "$(date '+%a %Y-%m-%d %H:%M:%S %Z')"
+        printf '           Universal time: %s\n' "$(date -u '+%a %Y-%m-%d %H:%M:%S UTC')"
+        printf '                Time zone: %s\n' "$(cat /etc/timezone 2>/dev/null || echo UTC)"
+        printf 'System clock synchronized: yes\n'
+        printf '              NTP service: active\n'
+        ;;
+esac

@@ -1,0 +1,56 @@
+# Files persisted into the wpsd-config volume by wpsd-config-sync.
+#
+# Derived from what the dashboard actually writes:
+#   grep -rhoE 'sudo (sed -i|cp|mv|tee|touch)[^;|]*(/etc/[a-zA-Z0-9._-]+)' \
+#        /var/www/dashboard --include='*.php'
+# plus the CONFIG= declarations in /usr/local/sbin/*.service.
+#
+# Lines may contain shell globs. Missing paths are skipped silently, so entries
+# for optional features are harmless.
+
+# --- radio daemon configs ---------------------------------------------------
+/etc/mmdvmhost
+/etc/dstar-radio.*
+/etc/ircddbgateway
+/etc/timeserver
+/etc/timeserver.disable
+/etc/starnetserver
+/etc/dmrgateway
+/etc/ysfgateway
+/etc/dgidgateway
+/etc/nxdngateway
+/etc/p25gateway
+/etc/aprsgateway
+/etc/dapnetgateway
+/etc/timercontrol
+/etc/ysf2dmr
+/etc/ysf2p25
+/etc/ysf2nxdn
+/etc/dmr2ysf
+/etc/dmr2nxdn
+/etc/nxdn2dmr
+
+# --- dashboard and WPSD state ------------------------------------------------
+/etc/WPSD-Dashboard-Config.ini
+/etc/WPSD-release
+/etc/.WPSD_config
+/etc/.wpsd-repeater
+/etc/.TGNAMES
+/etc/wpsd-css.ini
+/etc/wpsd-upnp-rules
+/etc/WPSD_config_mgr
+/var/www/.htpasswd
+
+# --- API keys the user pastes in --------------------------------------------
+/etc/dapnetapi.key
+/etc/bmapi.key
+
+# --- host-local overrides the dashboard edits -------------------------------
+/etc/NXDNHostsLocal.txt
+/etc/iptables.rules
+
+# --- identity and time ------------------------------------------------------
+/etc/hostname
+/etc/timezone
+/etc/localtime
+/etc/machine-id

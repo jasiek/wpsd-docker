@@ -1,0 +1,12 @@
+[Unit]
+Description=Yaesu System Fusion DGIdGateway Servce
+After=syslog.target network.target mmdvmhost.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/dgidgateway.service start
+ExecStop=/usr/local/sbin/dgidgateway.service stop
+ExecReload=/usr/local/sbin/dgidgateway.service restart
+
+[Install]
+WantedBy=multi-user.target

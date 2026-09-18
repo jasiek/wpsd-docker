@@ -1,0 +1,9 @@
+#!/command/with-contenv bash
+if [ "${WPSD_ENABLE_GPSD:-0}" != "1" ]; then
+    echo "gpsd: disabled (WPSD_ENABLE_GPSD != 1)" >&2
+    /command/s6-svc -d /run/service/gpsd
+    exec /command/s6-pause
+fi
+# -N foreground, -n poll without a client. WPSD_GPSD_DEVICE must be passed
+# through with --device for this to see anything.
+exec /usr/sbin/gpsd -N -n "${WPSD_GPSD_DEVICE:-/dev/ttyUSB0}"

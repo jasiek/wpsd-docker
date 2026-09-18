@@ -1,0 +1,12 @@
+[Unit]
+Description=PiStar-Watchdog Service Watchdog
+After=syslog.target network.target ircddbgateway.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/pistar-watchdog.service start
+ExecStop=/usr/local/sbin/pistar-watchdog.service stop
+ExecReload=/usr/local/sbin/pistar-watchdog.service restart
+
+[Install]
+WantedBy=multi-user.target

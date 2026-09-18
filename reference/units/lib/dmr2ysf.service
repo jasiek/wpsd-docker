@@ -1,0 +1,12 @@
+[Unit]
+Description=Pi-Star DMR2YSF Service
+After=syslog.target network.target mmdvmhost.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/dmr2ysf.service start
+ExecStop=/usr/local/sbin/dmr2ysf.service stop
+ExecReload=/usr/local/sbin/dmr2ysf.service restart
+
+[Install]
+WantedBy=multi-user.target

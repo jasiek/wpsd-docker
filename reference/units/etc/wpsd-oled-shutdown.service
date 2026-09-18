@@ -1,0 +1,15 @@
+[Unit]
+Description=Run WPSD OLED Text Update on Shutdown (After Unmount)
+DefaultDependencies=no
+After=umount.target
+Before=final.target
+Conflicts=reboot.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/.wpsd-oled.text.py --text1 "Safe to Power Off" --text2 "Shutdown Complete"
+Environment=SYSTEMD_INHIBIT_DELAY_MAX_USEC=0
+
+[Install]
+WantedBy=final.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Run WPSD Log Cleanup Every Minute
+Requires=wpsd-log-cleanup.service
+
+[Timer]
+Unit=wpsd-log-cleanup.service
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

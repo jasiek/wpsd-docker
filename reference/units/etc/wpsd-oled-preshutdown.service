@@ -1,0 +1,17 @@
+[Unit]
+Description=Run WPSD OLED Text Update on Pre-Shutdown
+DefaultDependencies=no
+After=mmdvmhost.service
+Before=poweroff.target
+Conflicts=multi-user.target
+ConditionPathExists=!/run/systemd/reboot
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/local/sbin/.wpsd-oled.text.py --text1 "Shutting Down..." --text2 "Don't remove power..."
+Environment=SYSTEMD_INHIBIT_DELAY_MAX_USEC=0
+
+[Install]
+WantedBy=poweroff.target

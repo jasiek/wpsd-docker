@@ -1,0 +1,12 @@
+[Unit]
+Description=Pi-Star YSF2P25 Service
+After=syslog.target network.target mmdvmhost.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/ysf2p25.service start
+ExecStop=/usr/local/sbin/ysf2p25.service stop
+ExecReload=/usr/local/sbin/ysf2p25.service restart
+
+[Install]
+WantedBy=multi-user.target

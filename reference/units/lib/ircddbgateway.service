@@ -1,0 +1,12 @@
+[Unit]
+Description=ircDDBGateway Radio Servce
+After=syslog.target network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/ircddbgateway.service start
+ExecStop=/usr/local/sbin/ircddbgateway.service stop
+ExecReload=/usr/local/sbin/ircddbgateway.service restart
+
+[Install]
+WantedBy=multi-user.target

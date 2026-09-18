@@ -1,0 +1,12 @@
+[Unit]
+Description=WPSD MMDVM Log Cleanup Service 
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/.wpsd-log-cleanup
+User=mmdvm
+Group=mmdvm
+
+[Install]
+WantedBy=multi-user.target

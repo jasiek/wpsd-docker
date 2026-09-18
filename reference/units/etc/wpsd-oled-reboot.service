@@ -1,0 +1,14 @@
+[Unit]
+Description=Run WPSD OLED Text Update on Reboot
+DefaultDependencies=no
+Before=reboot.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/local/sbin/.wpsd-oled.text.py --text1 "WPSD Rebooting..." --text2 "Please wait..."
+Environment=SYSTEMD_INHIBIT_DELAY_MAX_USEC=0
+
+[Install]
+WantedBy=reboot.target

@@ -1,0 +1,16 @@
+# 20250525_1
+[Unit]
+Description=Run WPSD NX Text Update on Bootup
+DefaultDependencies=no
+Before=nextiondriver.service mmdvmhost.service
+After=local-fs.target
+RequiresMountsFor=/dev/ttyAMA0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/.wpsd-nextion-text.py "t0" "WPSD Booting up..." ; /usr/local/sbin/.wpsd-nextion-text.py "t1" "Please wait..."
+Environment=SYSTEMD_INHIBIT_DELAY_MAX_USEC=0
+
+[Install]
+WantedBy=local-fs.target

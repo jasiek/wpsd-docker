@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+#
+# Persist WPSD's /etc configuration into the wpsd-config volume, and restore it.
+#
+# Why copy instead of mounting:
+#
+#   * A volume cannot be mounted over /etc, which is where every WPSD config file
+#     lives.
+#   * Bind-mounting the files individually breaks the dashboard: it edits config
+#     with `sudo sed -i` in 167 places, and sed -i works by rename, which fails
+#     with EBUSY on a bind-mounted file.
+#   * Symlinking into the volume breaks it differently: GNU sed -i without
+#     --follow-symlinks replaces the symlink with a regular file, so the first
+#     edit silently detaches /etc from the volume.
+#
+# So the files stay ordinary files in /etc and are copied. `restore` runs from
+# 01-init, `save` from cron every minute and from the shutdown hook, which bounds
+# the exposure of a `docker kill` to about a minute of config changes.
+#
+set -uo pipefail
+
+STORE=${WPSD_CONFIG_STORE:-/etc/wpsd}
+MANIFEST=${WPSD_CONFIG_MANIFEST:-/etc/wpsd-defaults/config-manifest}
+
+[[ -r $MANIFEST ]] || { echo "wpsd-config-sync: no manifest at $MANIFEST" >&2; exit 1; }
+mkdir -p "$STORE"
+
+# Manifest entries are absolute paths, one per line, '#' comments allowed.
+entries() { grep -vE '^\s*(#|$)' "$MANIFEST"; }
+
+# /etc/mmdvmhost -> etc__mmdvmhost, so the store stays flat and collision-free.
+flat() { local p=${1#/}; echo "${p//\//__}"; }
+
+case ${1:-} in
+    save)
+        n=0
+        while read -r pattern; do
+            # Unquoted so manifest globs such as /etc/dstar-radio.* expand.
+            for path in $pattern; do
+                [[ -e $path ]] || continue
+                dst="$STORE/$(flat "$path")"
+                cmp -s "$path" "$dst" 2>/dev/null && continue
+                cp -a "$path" "$dst" && n=$((n + 1))
+            done
+        done < <(entries)
+        [[ ${2:-} == -q ]] || echo "wpsd-config-sync: saved $n changed file(s) to $STORE"
+        ;;
+
+    restore)
+        # Restore is driven by what is IN the store, not by the manifest: a glob
+        # like /etc/dstar-radio.* matches nothing on a fresh container, so
+        # walking the manifest would skip exactly the files worth restoring.
+        n=0
+        shopt -s nullglob
+        for src in "$STORE"/*; do
+            rel=$(basename "$src")
+            path="/${rel//__/\/}"
+            cmp -s "$src" "$path" 2>/dev/null && continue
+            mkdir -p "$(dirname "$path")"
+            cp -a "$src" "$path" && n=$((n + 1))
+        done
+        shopt -u nullglob
+        [[ ${2:-} == -q ]] || echo "wpsd-config-sync: restored $n file(s) from $STORE"
+        ;;
+
+    list)
+        while read -r pattern; do
+          for path in $pattern; do
+            s="$STORE/$(flat "$path")"
+            if   [[ ! -e $path && ! -e $s ]]; then state="-"
+            elif [[ ! -e $s ]];             then state="unsaved"
+            elif cmp -s "$path" "$s";       then state="in sync"
+            else                                 state="MODIFIED"
+            fi
+            printf '%-40s %s\n' "$path" "$state"
+          done
+        done < <(entries)
+        ;;
+
+    *)
+        echo "usage: wpsd-config-sync {save|restore|list} [-q]" >&2
+        exit 1
+        ;;
+esac

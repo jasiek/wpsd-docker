@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# nmcli(1) stub. NetworkManager owns the host's radios, not the container's
+# network namespace, so the dashboard's wifi-manager cannot work here. Report an
+# empty device list so the page renders "no interfaces" instead of throwing, and
+# refuse writes loudly. See docs/HARDWARE.md.
+set -uo pipefail
+case " $* " in
+    *" show "*|*" status "*|*" -g "*|*" -t "*) exit 0 ;;   # empty result set
+esac
+echo "nmcli: network configuration is owned by the container host, not WPSD" >&2
+exit 1

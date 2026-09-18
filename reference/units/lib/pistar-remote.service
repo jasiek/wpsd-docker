@@ -1,0 +1,12 @@
+[Unit]
+Description=PiStar-Remote Service
+After=syslog.target network.target ircddbgateway.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/pistar-remote.service start
+ExecStop=/usr/local/sbin/pistar-remote.service stop
+ExecReload=/usr/local/sbin/pistar-remote.service restart
+
+[Install]
+WantedBy=multi-user.target

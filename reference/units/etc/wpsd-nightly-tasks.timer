@@ -1,0 +1,12 @@
+[Unit]
+Description=Run WPSD Nightly Tasks at random times between 0100 and 0359
+
+[Timer]
+# Run the service daily at 01:00 with up to 3 hours of random delay
+OnCalendar=*-*-* 01:00
+RandomizedDelaySec=2h 59m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+

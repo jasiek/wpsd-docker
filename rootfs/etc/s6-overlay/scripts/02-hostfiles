@@ -1,0 +1,22 @@
+#!/command/with-contenv bash
+#
+# Fetch the host, talkgroup and DMR-ID data MMDVMHost and the gateways need to
+# route calls. ~39 MB, regenerated upstream continuously, so it lives in a volume
+# and is never baked into the image.
+#
+set -uo pipefail
+log() { echo "[wpsd-hostfiles] $*"; }
+
+if [[ -s /usr/local/etc/DMR_Hosts.txt && -s /usr/local/etc/DMRIds.dat ]]; then
+    log "host files present, skipping initial fetch"
+    exit 0
+fi
+
+log "first run: fetching host files (this takes a minute)"
+if /usr/local/sbin/wpsd-hostfile-update >/var/log/wpsd/hostfile-update.log 2>&1; then
+    log "host files fetched"
+else
+    log "WARNING: host file fetch failed -- see /var/log/wpsd/hostfile-update.log."
+    log "         WPSD will start, but reflector and talkgroup lists will be empty"
+fi
+exit 0

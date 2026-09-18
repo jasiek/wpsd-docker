@@ -1,0 +1,8 @@
+#!/command/with-contenv bash
+if [ "${WPSD_ENABLE_SAMBA:-0}" != "1" ]; then
+    echo "samba: disabled (WPSD_ENABLE_SAMBA != 1)" >&2
+    /command/s6-svc -d /run/service/samba
+    exec /command/s6-pause
+fi
+mkdir -p /run/samba /var/lib/samba/private /var/cache/samba
+exec /usr/sbin/smbd --foreground --no-process-group

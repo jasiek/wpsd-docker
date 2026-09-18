@@ -1,0 +1,10 @@
+#!/command/with-contenv bash
+# wpsd-services fullstop also runs process_log_file, which strips the dangling
+# "received network voice header" lines a mid-transmission stop leaves behind --
+# without it the dashboard shows a permanent phantom TX.
+echo "[wpsd-stop] persisting configuration"
+/usr/local/bin/wpsd-config-sync save 2>&1 | sed 's/^/[wpsd-stop] /'
+
+echo "[wpsd-stop] stopping WPSD services"
+/usr/local/sbin/wpsd-services fullstop 2>&1 | sed 's/^/[wpsd-stop] /'
+exit 0

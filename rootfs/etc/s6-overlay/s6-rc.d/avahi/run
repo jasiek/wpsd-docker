@@ -1,0 +1,8 @@
+#!/command/with-contenv bash
+if [ "${WPSD_ENABLE_AVAHI:-0}" != "1" ]; then
+    echo "avahi: disabled (WPSD_ENABLE_AVAHI != 1)" >&2
+    /command/s6-svc -d /run/service/avahi
+    exec /command/s6-pause
+fi
+mkdir -p /run/avahi-daemon && chown avahi:avahi /run/avahi-daemon
+exec /usr/sbin/avahi-daemon --no-chroot -s

@@ -1,0 +1,12 @@
+[Unit]
+Description=Pi-Star DAPNet Gateway Service
+After=syslog.target network.target mmdvmhost.timer
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/dapnetgateway.service start
+ExecStop=/usr/local/sbin/dapnetgateway.service stop
+ExecReload=/usr/local/sbin/dapnetgateway.service restart
+
+[Install]
+WantedBy=multi-user.target

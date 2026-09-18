@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# shutdown(8) shim. The dashboard calls `sudo shutdown -h now`; -r means reboot.
+set -uo pipefail
+for a in "$@"; do case $a in -r|--reboot) exec /usr/local/bin/systemctl reboot ;; esac; done
+exec /usr/local/bin/systemctl poweroff

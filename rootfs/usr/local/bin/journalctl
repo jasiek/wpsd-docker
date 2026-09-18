@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# journalctl(1) shim. .wpsd-running-tasks calls --rotate / --vacuum-time /
+# --vacuum-size to keep the journal from filling an SD card; a container's logs
+# are the orchestrator's problem, so those are no-ops. Reads are served from the
+# s6 catch-all log so `journalctl` still shows something useful.
+set -uo pipefail
+LOGDIR=${WPSD_LOG_DIR:-/var/log/wpsd}
+follow=0; lines=""
+for a in "$@"; do
+    case $a in
+        --rotate|--vacuum-time=*|--vacuum-size=*|--vacuum-files=*|--flush|--sync)
+            exit 0 ;;
+        -f|--follow) follow=1 ;;
+        -n)          lines=pending ;;
+        -n*)         lines=${a#-n} ;;
+        --lines=*)   lines=${a#--lines=} ;;
+        *)           [[ $lines == pending ]] && lines=$a ;;
+    esac
+done
+[[ -d $LOGDIR ]] || exit 0
+files=$(find "$LOGDIR" -name 'current' -o -name '@*.s' 2>/dev/null | sort)
+[[ -z $files ]] && exit 0
+if [[ $follow -eq 1 ]]; then exec tail -n "${lines:-10}" -F $files; fi
+tail -n "${lines:-200}" -q $files

@@ -1,0 +1,12 @@
+[Unit]
+Description=DMRGateway Radio Servce
+After=syslog.target network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sbin/dmrgateway.service start
+ExecStop=/usr/local/sbin/dmrgateway.service stop
+ExecReload=/usr/local/sbin/dmrgateway.service restart
+
+[Install]
+WantedBy=multi-user.target

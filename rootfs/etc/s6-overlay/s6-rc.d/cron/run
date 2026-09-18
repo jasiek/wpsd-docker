@@ -1,0 +1,3 @@
+#!/command/with-contenv bash
+# cron carries the five systemd timers the appliance used; see /etc/cron.d/wpsd-timers.
+exec /usr/sbin/cron -f -L 1

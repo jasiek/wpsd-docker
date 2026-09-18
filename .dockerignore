@@ -1,0 +1,14 @@
+# The appliance image: 3.8 GB, and the build never reads it.
+*.img
+*.img.xz
+
+.git
+.build
+docs
+README.md
+
+# Reference material is dev-time only -- except the two unpackaged shared libs
+# that reference/Dockerfile.armhf-reference needs from the build context.
+reference/units
+reference/rootfs
+!reference/rootfs/lib-armhf

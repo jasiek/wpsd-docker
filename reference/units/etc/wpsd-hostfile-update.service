@@ -1,0 +1,8 @@
+[Unit]
+Description=WPSD Hostfile Update Service
+
+[Service]
+ExecStart=/usr/local/sbin/wpsd-hostfile-update
+User=root
+Group=root
+Type=oneshot

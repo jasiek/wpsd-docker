@@ -1,0 +1,20 @@
+#!/command/with-contenv bash
+#
+# Hand off to WPSD's own start sequence. wpsd-services already orders the radio
+# daemons correctly and gates each on its config, which is why this replaces both
+# mmdvmhost.timer (OnStartupSec=30) and dmrgateway.timer (OnStartupSec=20).
+#
+set -uo pipefail
+log() { echo "[wpsd-start] $*"; }
+
+# Populate /etc/WPSD-release before anything reads it.
+/usr/local/sbin/.wpsd-sys-cache >/dev/null 2>&1 || true
+/usr/local/sbin/.wpsd-motdgen   >/dev/null 2>&1 || true
+
+if [[ ! -f /etc/dstar-radio.mmdvmhost ]]; then
+    log "WPSD is not configured yet -- open the dashboard and run Configuration."
+    log "The radio daemons stay down until a modem is configured; this is upstream behaviour."
+fi
+
+/usr/local/sbin/wpsd-services start 2>&1 | sed 's/^/[wpsd-start] /'
+exit 0

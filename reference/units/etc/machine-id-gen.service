@@ -1,0 +1,14 @@
+[Unit]
+Description=Generate /etc/machine-id if missing
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=sysinit.target systemd-journald.service
+ConditionPathExists=!/etc/machine-id
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'systemd-machine-id-setup || dbus-uuidgen --ensure=/etc/machine-id'
+
+[Install]
+WantedBy=sysinit.target
+

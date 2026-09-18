@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1
+#
+# Reference container: the appliance's own prebuilt armhf binaries, unmodified.
+#
+# Purpose is behaviour diffing, not deployment. Run it beside the native image and
+# compare rendered dashboard pages; anything differing beyond version strings,
+# platform string, UUID and CPU temperature is a bug in the native build.
+#
+#   docker build -f reference/Dockerfile.armhf-reference \
+#                --platform linux/arm/v7 -t wpsd:armhf-reference .
+#
+# On an arm64 Linux host these binaries run natively (the kernel keeps AArch32
+# support). On Apple Silicon they run under QEMU, since the CPU has no AArch32 at
+# all -- slow, but a hotspot's CPU load is trivial.
+#
+# Requires scripts/extract-reference.sh to have been run: libwiringPi and
+# libArduiPi_OLED are not packaged anywhere, they only exist inside the image.
+
+FROM arm32v7/debian:trixie-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nginx php8.4-fpm php8.4-cli php8.4-mbstring php8.4-zip php8.4-readline \
+        cron sudo bash git curl jq procps psmisc iproute2 net-tools \
+        apache2-utils lsb-release locales tzdata ca-certificates \
+        libsamplerate0 libwxbase3.2-1t64 libi2c0 python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# The binaries as W0CHP compiled them: armhf, 32-bit, stripped.
+RUN git clone --depth 1 --branch master \
+        https://wpsd-swd.w0chp.net/WPSD-SWD/WPSD-Binaries.git /usr/local/bin.git \
+    && cp -a /usr/local/bin.git/. /usr/local/bin/ \
+    && rm -rf /usr/local/bin/.git /usr/local/bin.git
+
+# MMDVMHost's NEEDED list includes libwiringPi.so, libwiringPiDev.so and
+# libArduiPi_OLED.so.1 -- load-time dependencies with no Debian package. These
+# come out of the appliance image via scripts/extract-reference.sh.
+COPY reference/rootfs/lib-armhf/ /usr/local/lib/
+RUN cd /usr/local/lib \
+    && ln -sf libwiringPi.so.2.52    libwiringPi.so \
+    && ln -sf libwiringPiDev.so.2.52 libwiringPiDev.so \
+    && ln -sf libArduiPi_OLED.so.1.0 libArduiPi_OLED.so.1 \
+    && ldconfig \
+    && MMDVMHost -v
